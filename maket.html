@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Заправка в рейсе — макет экранов</title>
+<style>
+  :root{
+    --brand:#ff6200;--brand-soft:#fff0e6;--ink:#111;--sub:#3f4a5a;--bg:#f3f4f6;
+    --ok:#15803d;--ok-soft:#e8f7ee;--warn:#a16207;--warn-soft:#fff7ed;
+    --bad:#b91c1c;--bad-soft:#fef2f2;--line:#e5e7eb;
+    --cheap:#15803d;--mid:#a16207;--dear:#c2410c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#e9ebef;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+  header.page{padding:28px 32px 8px;max-width:1100px}
+  header.page h1{margin:0;font-size:22px}
+  header.page p{margin:8px 0 0;color:#3f4a5a;font-size:15px;line-height:1.45;font-weight:500}
+  .section{padding:8px 32px 0}
+  .section h2{margin:24px 0 0;font-size:14px;color:#3f4a5a;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+  .canvas{display:flex;gap:36px;padding:16px 32px 40px;overflow-x:auto;align-items:flex-start}
+  .frame{flex:none;display:flex;flex-direction:column;gap:10px}
+  .frame .label{font-size:14px;color:#3f4a5a;font-weight:700}
+  .screen{width:390px;height:844px;background:#fff;border-radius:36px;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(17,24,39,.08)}
+  .status{height:47px;display:flex;justify-content:space-between;align-items:flex-end;padding:0 28px 8px;font-size:15px;font-weight:700;flex:none}
+  .status .sig{font-size:13px;font-weight:800}
+  .status .sig.weak{color:var(--warn)}
+  .status .sig.none{color:var(--bad)}
+  .banner{flex:none;padding:12px 18px;font-size:15px;font-weight:700;line-height:1.35}
+  .banner.warn{background:var(--warn-soft);color:var(--warn)}
+  .banner.bad{background:var(--bad-soft);color:var(--bad)}
+  .content{flex:1;padding:4px 18px 14px;display:flex;flex-direction:column;gap:12px;overflow:hidden;min-height:0}
+  .content.scroll{overflow-y:auto}
+  .topbar{display:flex;align-items:center;gap:10px;min-height:48px}
+  .back,.help{width:52px;height:52px;border-radius:16px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;flex:none}
+  .help{margin-left:auto;font-size:20px;color:var(--sub)}
+  .topbar h2{margin:0;font-size:20px;font-weight:800;line-height:1.2;flex:1}
+  .title{font-size:28px;font-weight:800;margin:4px 0 0}
+  .title-row{display:flex;align-items:center;gap:8px}
+  .title-row .title{flex:1}
+  .title-row .help{margin-left:0}
+  .hold-line{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 2px}
+  .hold-line .muted{flex:1;font-size:14px}
+  .hold-link{flex:none;font-size:14px;font-weight:800;color:var(--brand);white-space:nowrap}
+  .muted{color:var(--sub);font-size:15px;line-height:1.4;font-weight:600}
+  .muted.sm{font-size:13px;font-weight:600;color:#526074}
+  .card{background:var(--bg);border-radius:16px;padding:16px}
+  .route{font-size:22px;font-weight:800;margin:4px 0}
+  .limit{font-size:40px;font-weight:800;letter-spacing:-.5px;line-height:1.05}
+  .progress{height:10px;background:#e3e6eb;border-radius:5px;overflow:hidden;margin-top:12px}
+  .progress i{display:block;height:100%;background:var(--brand)}
+  .btn{display:flex;align-items:center;justify-content:center;width:100%;text-align:center;background:var(--brand);color:#fff;font-weight:800;font-size:18px;border-radius:18px;padding:18px 14px;line-height:1.2;min-height:64px}
+  .btn.secondary{background:#fff;color:var(--ink);border:2px solid #c5cad3}
+  .btn.ghost{background:transparent;color:var(--sub);border:2px solid transparent;min-height:56px;font-size:16px}
+  .btn.danger{background:var(--bad-soft);color:var(--bad)}
+  .btn.disabled{opacity:.4}
+  .bottom{padding:10px 18px 28px;flex:none;display:flex;flex-direction:column;gap:10px}
+  .row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .row > span:last-child{font-weight:700;text-align:right}
+  .summary .row{padding:12px 0;font-size:16px;border-bottom:1px solid var(--line)}
+  .summary .row:last-child{border-bottom:0}
+  .summary .row span:first-child{color:var(--sub);font-weight:600}
+  .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center}
+  .okicon,.warnicon,.badicon{width:84px;height:84px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:800}
+  .okicon{background:var(--ok-soft);color:var(--ok)}
+  .warnicon{background:var(--warn-soft);color:var(--warn)}
+  .badicon{background:var(--bad-soft);color:var(--bad)}
+  .big{font-size:26px;font-weight:800;line-height:1.15}
+  .note{border-left:3px solid var(--brand);background:#fff;padding:12px 16px;border-radius:8px;font-size:14px;color:#3f4a5a;max-width:390px;line-height:1.45;font-weight:500}
+
+  /* цепочка этапов */
+  .steps{display:flex;align-items:flex-start;gap:0;padding:10px 4px 8px;overflow:visible;flex:none;min-height:48px}
+  .steps .s{flex:1;min-width:0;text-align:center;font-size:11px;font-weight:800;color:#94a3b8;position:relative;padding:22px 2px 0;line-height:1.15}
+  .steps .s::before{content:"";position:absolute;top:6px;left:50%;width:10px;height:10px;border-radius:50%;background:#d1d5db;transform:translateX(-50%);z-index:1}
+  .steps .s:not(:last-child)::after{content:"";position:absolute;top:10px;left:calc(50% + 9px);right:calc(-50% + 9px);height:2px;background:#e5e7eb}
+  .steps .s.done{color:var(--ok)}
+  .steps .s.done::before{background:var(--ok)}
+  .steps .s.done:not(:last-child)::after{background:#86efac}
+  .steps .s.now{color:var(--brand)}
+  .steps .s.now::before{background:var(--brand);box-shadow:0 0 0 4px var(--brand-soft)}
+  .scroll-body{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-bottom:4px}
+
+  /* история */
+  .hist{display:flex;flex-direction:column;gap:8px}
+  .hist-item{background:var(--bg);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:4px}
+  .hist-item .top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .hist-item .name{font-size:16px;font-weight:800}
+  .hist-item .st{font-size:14px;font-weight:800}
+  .hist-item .st.ok{color:var(--ok)}
+  .hist-item .st.bad{color:var(--bad)}
+  .linkish{display:block;text-align:center;font-size:16px;font-weight:800;color:var(--brand);padding:8px 0 2px}
+
+  /* АЗС */
+  .seg{display:flex;background:var(--bg);border-radius:14px;padding:4px;gap:4px;flex:1}
+  .seg span{flex:1;text-align:center;padding:12px 8px;border-radius:11px;font-size:14px;font-weight:800;color:var(--sub)}
+  .seg span.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .radius{display:flex;align-items:center;gap:8px;background:var(--bg);border-radius:14px;padding:8px 10px 8px 14px}
+  .radius b{font-size:15px;font-weight:800;white-space:nowrap}
+  .radius .seg{flex:1;background:#fff}
+  .radius .seg span.on{background:var(--brand);color:#fff;box-shadow:none}
+  .near-block{border:2px solid var(--brand);background:var(--brand-soft);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:8px;border-left:6px solid #cbd5e1}
+  .near-block.cheap{border-left-color:var(--cheap)}
+  .near-block.mid{border-left-color:#eab308}
+  .near-block.dear{border-left-color:var(--dear)}
+  .cmp .lbl-dear{color:var(--dear);font-weight:800;font-size:16px}
+  .cmp .lbl-good{color:var(--cheap);font-weight:800;font-size:16px}
+  .cmp .price-dear,.cmp .price-good{font-size:22px;font-weight:800}
+  .cmp .muted.sm{font-size:15px}
+  .btn.dear-go{color:var(--bad)!important;font-weight:800}
+  .pill-tag.near-tag{background:var(--brand);border-color:var(--brand);color:#fff}
+  .station{display:flex;flex-direction:column;gap:8px;padding:14px;background:var(--bg);border-radius:16px;border-left:6px solid #cbd5e1}
+  .station.cheap{border-left-color:var(--cheap)}
+  .station.mid{border-left-color:#eab308}
+  .station.dear{border-left-color:var(--dear)}
+  .station .name{font-size:17px;font-weight:800;line-height:1.3;flex:1;min-width:0}
+  .station .row{align-items:flex-start}
+  .station .row .pill-tag{flex:none;margin-top:2px}
+  .station .addr{line-height:1.35}
+  .station .dist{font-size:20px;font-weight:800;letter-spacing:-.3px}
+  .station .price{font-size:20px;font-weight:800}
+  .station .meta{display:flex;justify-content:space-between;align-items:flex-end;gap:8px}
+  .price-col{display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:right}
+  .price-col .cap{font-size:13px;font-weight:700;color:var(--sub)}
+  .pill-tag{display:inline-flex;align-items:center;font-size:13px;font-weight:800;padding:5px 10px;border-radius:8px;background:#fff;border:1.5px solid #c5cad3;color:var(--sub)}
+  .pill-tag.deal{background:#dcfce7;border-color:#86efac;color:var(--cheap)}
+  .pill-tag.mid{background:#fef9c3;border-color:#facc15;color:var(--mid)}
+  .pill-tag.dear{background:#ffedd5;border-color:#fdba74;color:var(--dear)}
+  .fuel-filter{display:flex;align-items:center;gap:8px;background:var(--brand-soft);border-radius:14px;padding:12px 14px}
+  .fuel-filter b{font-size:16px;font-weight:800}
+  .fuel-filter span{margin-left:auto;font-size:14px;font-weight:800;color:var(--brand)}
+  .section-label{font-size:15px;font-weight:800;color:var(--ink);margin-top:4px}
+
+  /* топливо — крупные pills / chips */
+  .chiprow{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{min-height:72px;min-width:calc(50% - 5px);flex:1 1 calc(50% - 5px);padding:14px 16px;border-radius:20px;background:var(--bg);border:3px solid transparent;font-weight:800;font-size:18px;display:flex;flex-direction:column;justify-content:center;gap:4px}
+  .chip em{font-style:normal;font-size:15px;font-weight:700;color:var(--sub)}
+  .chip.on{border-color:var(--brand);background:var(--brand-soft)}
+
+  /* колонки */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .pump{min-height:76px;border-radius:16px;background:#fff;border:3px solid #c5cad3;padding:12px 14px;display:flex;flex-direction:column;justify-content:center;gap:2px;font-weight:800;font-size:22px}
+  .pump em{font-style:normal;font-size:14px;font-weight:700}
+  .pump.free{border-color:#86efac}
+  .pump.free em{color:var(--ok)}
+  .pump.busy,.pump.off{opacity:.55}
+  .pump.busy em{color:var(--bad)}
+  .pump.off em{color:#64748b}
+  .pump.on{border-color:var(--brand);background:var(--brand-soft);opacity:1}
+
+  /* объём */
+  .amount-row{display:grid;grid-template-columns:88px 1fr 88px;gap:10px;align-items:center}
+  .amount-row .btn{font-size:24px;min-height:72px;padding:0;border-radius:18px}
+  .amount-box{text-align:center;padding:0}
+  .amount-box .val{font-size:48px;font-weight:800;letter-spacing:-1px;line-height:1}
+  .amount-box .sum{margin-top:6px;font-size:20px;font-weight:800}
+  .stepper{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .stepper .btn{font-size:22px}
+  .budget{background:var(--bg);border-radius:14px;padding:12px 14px;display:flex;align-items:flex-start;gap:10px}
+  .budget .t{font-size:15px;font-weight:700;color:var(--sub);line-height:1.35;flex:1}
+  .budget .t b{display:block;margin-top:4px;font-size:18px;font-weight:800;color:var(--ink)}
+  .budget .help{width:40px;height:40px;min-width:40px;border-radius:12px;font-size:18px;margin-left:0}
+  .btn.recommend{background:var(--ok-soft);color:var(--ok);border:2px solid var(--ok);font-size:17px;box-shadow:none;flex:1}
+  .btn.recommend.on{background:var(--brand-soft);color:var(--brand);border:3px solid var(--brand)}
+  .rec-row{display:flex;align-items:center;gap:10px}
+  .rec-row .help{margin-left:0;flex:none}
+  .vol-input{width:100%;border:none;background:transparent;font-size:48px;font-weight:800;letter-spacing:-1px;line-height:1;text-align:center;font-family:inherit;color:var(--ink);padding:0;outline:none}
+  .vol-unit{font-size:18px;font-weight:800;color:var(--sub);margin-top:2px}
+  .price-dear{color:var(--dear)!important;font-weight:800}
+  .price-good{color:var(--cheap)!important;font-weight:800}
+  .tip-save{background:var(--ok-soft);color:#166534;border-radius:14px;padding:12px 14px;font-size:15px;font-weight:700;line-height:1.35}
+  .btn.sending{opacity:.55;pointer-events:none}
+
+  .hint{background:var(--warn-soft);color:var(--warn);border-radius:14px;padding:12px 14px;font-size:15px;font-weight:700;line-height:1.35}
+  .hint.ok{background:var(--ok-soft);color:#166534}
+  .hint.bad{background:var(--bad-soft);color:var(--bad)}
+  .hint.neutral{background:var(--bg);color:var(--sub)}
+
+  .live-wrap{display:flex;align-items:baseline;justify-content:center;gap:8px;line-height:1}
+  .live{font-size:56px;font-weight:800;letter-spacing:-1px}
+  .live-max{font-size:28px;font-weight:800;color:var(--sub)}
+
+  .nozzle{width:160px;height:160px;display:flex;align-items:center;justify-content:center}
+  .nozzle svg{width:140px;height:140px}
+  .timer{font-size:44px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+  .timer-label{font-size:15px;font-weight:700;color:var(--sub);margin-top:-6px}
+
+  .overlay{position:absolute;inset:0;background:rgba(17,24,39,.5);display:flex;align-items:flex-end;padding:16px;z-index:2}
+  .sheet{background:#fff;border-radius:24px;padding:22px 18px 24px;width:100%;display:flex;flex-direction:column;gap:12px}
+  .sheet h3{margin:0;font-size:22px;font-weight:800}
+  .sheet .alt{background:var(--ok-soft);border-radius:14px;padding:14px;text-align:left}
+  .sheet .alt b{display:block;font-size:16px;font-weight:800;color:var(--ok);margin-bottom:4px}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Заправка в рейсе — макет экранов</h1>
+</header>
+
+<div class="section"><h2>Основной сценарий</h2></div>
+<div class="canvas">
+
+  <!-- 1 Главный -->
+  <div class="frame">
+    <div class="label">1 · Главный</div>
+    <div class="screen">
+      <div class="status"><span>9:41</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="content scroll">
+        <div class="title">Заправка в рейсе</div>
+        <div class="card">
+          <div class="muted">Текущий рейс · 16 октября</div>
+          <div class="route">Москва → Казань</div>
+          <div class="muted">Тягач А123ВС 77</div>
+        </div>
+        <div class="card">
+          <div class="muted">Доступно сейчас</div>
+          <div class="limit">9 340 ₽</div>
+          <div class="muted">из 20 000 ₽ на рейс</div>
+          <div class="progress"><i style="width:47%"></i></div>
+        </div>
+        <div class="hold-line">
+          <span class="muted">Часть суммы может быть в холде</span>
+          <span class="hold-link">Что такое холд?</span>
+        </div>
+        <div class="section-label">Последние заправки</div>
+        <div class="hist">
+          <div class="hist-item">
+            <div class="top"><span class="name">Магистраль · Лакинск</span><span class="st ok">Успешно</span></div>
+            <div class="muted">15 окт · 78 л · 5 600 ₽</div>
+          </div>
+          <div class="hist-item">
+            <div class="top"><span class="name">Колесо · М-7</span><span class="st bad">Холд возвращён</span></div>
+            <div class="muted">15 окт · колонка не завелась · 0 л</div>
+          </div>
+        </div>
+        <span class="linkish">Вся история →</span>
+      </div>
+      <div class="bottom"><span class="btn">Заправиться</span></div>
+    </div>
+  </div>
+
+  <!-- 1? Холд -->
+  <div class="frame">
+    <div class="label">1? · Справка · холд</div>
+    <div class="screen">
+      <div class="status"><span>9:41</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="overlay">
+        <div class="sheet">
+          <h3>Что такое холд</h3>
+          <div class="muted">При заказе сумма временно блокируется на лимите рейса. Потратить её на другой заказ нельзя.</div>
+          <div class="muted">После заправки списывается только факт. Остаток холда возвращается в «доступно».</div>
+          <div class="muted">Если заправка не прошла — холд возвращается. Иногда это занимает время, пока АЗС подтвердит.</div>
+          <span class="btn">Понятно</span>
+        </div>
+      </div>
+      <div class="content"><div class="title">Заправка в рейсе</div></div>
+    </div>
+  </div>
+
+  <!-- 1h История -->
+  <div class="frame">
+    <div class="label">1h · История</div>
+    <div class="screen">
+      <div class="status"><span>9:41</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="content scroll">
+        <div class="topbar"><span class="back">←</span><h2>История заправок</h2></div>
+        <div class="hist">
+          <div class="hist-item">
+            <div class="top"><span class="name">Магистраль №220</span><span class="st ok">Успешно</span></div>
+            <div class="muted">15 окт, 18:20 · Лакинск</div>
+            <div class="row" style="margin-top:6px"><span class="muted">Залито</span><span>78 л · ДТ</span></div>
+            <div class="row"><span class="muted">Списано</span><span>5 600 ₽</span></div>
+          </div>
+          <div class="hist-item">
+            <div class="top"><span class="name">Колесо №105</span><span class="st bad">Не удалось</span></div>
+            <div class="muted">15 окт, 09:10</div>
+            <div class="row" style="margin-top:6px"><span class="muted">Причина</span><span>Колонка не ответила</span></div>
+            <div class="row"><span class="muted">Холд</span><span>возвращён</span></div>
+          </div>
+          <div class="hist-item">
+            <div class="top"><span class="name">Север Ойл №88</span><span class="st bad">Отменено</span></div>
+            <div class="muted">14 окт, 21:05</div>
+            <div class="row" style="margin-top:6px"><span class="muted">Причина</span><span>Нет пистолета</span></div>
+            <div class="row"><span class="muted">Холд</span><span>возвращён</span></div>
+          </div>
+          <div class="hist-item">
+            <div class="top"><span class="name">ТрассНефть №401</span><span class="st ok">Успешно</span></div>
+            <div class="muted">12 окт · недолив</div>
+            <div class="row" style="margin-top:6px"><span class="muted">Заказано / факт</span><span>120 / 69,7 л</span></div>
+            <div class="row"><span class="muted">Списано</span><span>5 000 ₽</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 Топливо сначала -->
+  <div class="frame">
+    <div class="label">2 · Топливо</div>
+    <div class="screen">
+      <div class="status"><span>9:42</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="content">
+        <div class="topbar"><span class="back">←</span><h2>Выбор топлива</h2></div>
+        <div class="steps">
+          <span class="s now">Топливо</span>
+          <span class="s">АЗС</span>
+          <span class="s">Колонка</span>
+          <span class="s">Объём</span>
+          <span class="s">Налив</span>
+        </div>
+        <div class="muted">Покажем АЗС, где оно есть</div>
+        <div class="chiprow">
+          <span class="chip on">ДТ<em>дизель</em></span>
+          <span class="chip">АИ-92<em>бензин</em></span>
+          <span class="chip">АИ-95<em>бензин</em></span>
+          <span class="chip">Пропан<em>газ</em></span>
+        </div>
+        <div class="hint neutral">Один вид на заказ. Точное имя на АЗС может отличаться («ДТ ЭКО», «Дизель»).</div>
+      </div>
+      <div class="bottom"><span class="btn">К выбору АЗС</span></div>
+    </div>
+  </div>
+
+  <!-- 3 АЗС -->
+  <div class="frame">
+    <div class="label">3 · АЗС</div>
+    <div class="screen">
+      <div class="status"><span>9:42</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="content">
+        <div class="topbar"><span class="back">←</span><h2>Выбор АЗС</h2></div>
+        <div class="steps">
+          <span class="s done">Топливо</span>
+          <span class="s now">АЗС</span>
+          <span class="s">Колонка</span>
+          <span class="s">Объём</span>
+          <span class="s">Налив</span>
+        </div>
+        <div class="scroll-body">
+          <div class="fuel-filter">
+            <b>ДТ / дизель</b>
+            <span>Изменить</span>
+          </div>
+
+          <div class="radius">
+            <b>Радиус</b>
+            <div class="seg"><span>20</span><span class="on">40 км</span><span>80</span></div>
+          </div>
+          <div class="seg">
+            <span class="on">По цене</span>
+            <span>По близости</span>
+          </div>
+
+          <div class="section-label">Вы на месте?</div>
+          <div class="near-block station dear">
+            <div class="row">
+              <span class="name">Колесо АЗС №281 (трасса М-7, 132 км)</span>
+              <span class="pill-tag near-tag">Ближайшая</span>
+            </div>
+            <div class="muted addr">Владимирская область, трасса М-7, 132 км, справа по ходу</div>
+            <div class="meta">
+              <span class="dist">400 м</span>
+              <span class="price" style="color:var(--dear)">71,71 ₽/л</span>
+            </div>
+          </div>
+
+          <div class="section-label">Рекомендуем в радиусе</div>
+          <div class="station cheap">
+            <div class="row">
+              <span class="name">Волга-Топливо АЗС №412 (трасса М-7, 148 км)</span>
+              <span class="pill-tag deal">★ Выгодно</span>
+            </div>
+            <div class="muted addr">Казань, Республика Татарстан, трасса М-7, 148 км, справа по ходу</div>
+            <div class="meta">
+              <span class="dist">18 км</span>
+              <span class="price" style="color:var(--cheap)">70,70 ₽/л</span>
+            </div>
+          </div>
+          <div class="station mid">
+            <div class="row">
+              <span class="name">Север Ойл АЗС №118 (трасса М-7, 140 км)</span>
+              <span class="pill-tag mid">Средняя</span>
+            </div>
+            <div class="muted addr">Владимирская область, трасса М-7, 140 км</div>
+            <div class="meta">
+              <span class="dist">11 км</span>
+              <span class="price" style="color:var(--mid)">73,10 ₽/л</span>
+            </div>
+          </div>
+          <div class="station dear">
+            <div class="row">
+              <span class="name">Магистраль АЗС №905 (трасса М-7, 155 км)</span>
+              <span class="pill-tag dear">Дорого</span>
+            </div>
+            <div class="muted addr">Владимирская область, г. Лакинск, трасса М-7, 155 км, слева по ходу</div>
+            <div class="meta">
+              <span class="dist">22 км</span>
+              <span class="price" style="color:var(--dear)">74,20 ₽/л</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3e Дорогая -->
+  <div class="frame">
+    <div class="label">3e · Дорогая АЗС</div>
+    <div class="screen">
+      <div class="status"><span>9:42</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="overlay">
+        <div class="sheet">
+          <h3>Не упустите выгодную АЗС</h3>
+          <div class="card cmp">
+            <div class="row"><span class="lbl-dear">Выбрано</span><span class="price-dear" style="color:var(--dear)">71,71 ₽/л</span></div>
+            <div class="muted sm">Колесо №281 · 400 м</div>
+            <div class="row" style="margin-top:10px"><span class="lbl-good">Выгоднее</span><span class="price-good" style="color:var(--cheap)">70,70 ₽/л</span></div>
+            <div class="muted sm">Волга-Топливо №412 · 18 км</div>
+          </div>
+          <span class="btn">К выгодной АЗС</span>
+          <span class="btn secondary dear-go">К дорогой АЗС</span>
+          <span class="btn ghost">К списку АЗС</span>
+        </div>
+      </div>
+      <div class="content"><div class="topbar"><span class="back">←</span><h2>Где заправиться</h2></div></div>
+    </div>
+  </div>
+
+  <!-- 4 Колонка -->
+  <div class="frame">
+    <div class="label">4 · Колонка</div>
+    <div class="screen">
+      <div class="status"><span>9:43</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="content scroll">
+        <div class="topbar"><span class="back">←</span><h2>Колесо №281</h2></div>
+        <div class="steps">
+          <span class="s done">Топливо</span>
+          <span class="s done">АЗС</span>
+          <span class="s now">Колонка</span>
+          <span class="s">Объём</span>
+          <span class="s">Налив</span>
+        </div>
+        <div class="card">
+          <div class="row"><span class="muted">Топливо</span><span>ДТ ЭКО · 71,71 ₽/л</span></div>
+          <div class="row" style="margin-top:8px"><span class="muted">Адрес</span><span style="max-width:200px">Владимирская область, трасса М-7, 132 км</span></div>
+        </div>
+        <div class="section-label">Колонка</div>
+        <div class="grid2">
+          <span class="pump busy">А · 1<em>занята</em></span>
+          <span class="pump free on">Б · 2<em>свободна · ДТ</em></span>
+          <span class="pump free">В · 3<em>свободна · ДТ</em></span>
+          <span class="pump off">Г · 4<em>выключена</em></span>
+        </div>
+        <div class="hint neutral">У сети «Колесо» на стойках буквы: А = 1, Б = 2, В = 3, ...</div>
+      </div>
+      <div class="bottom"><span class="btn">К выбору объёма</span></div>
+    </div>
+  </div>
+
+  <!-- 5 Объём в бюджете -->
+  <div class="frame">
+    <div class="label">5 · Объём</div>
+    <div class="screen">
+      <div class="status"><span>9:44</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="content">
+        <div class="topbar"><span class="back">←</span><h2>Сколько лить</h2></div>
+        <div class="steps">
+          <span class="s done">Топливо</span>
+          <span class="s done">АЗС</span>
+          <span class="s done">Колонка</span>
+          <span class="s now">Объём</span>
+          <span class="s">Налив</span>
+        </div>
+        <div class="card">
+          <div class="muted">Колесо №281 · Б (2) · ДТ ЭКО</div>
+          <div class="row" style="margin-top:10px;font-size:16px"><span class="muted">Цена</span><span>71,71 ₽/л</span></div>
+          <div class="row" style="font-size:16px"><span class="muted">Лимит АЗС на одну заправку</span><span>до 150 л</span></div>
+          <div class="row" style="font-size:16px"><span class="muted">Доступно</span><span>9 340 ₽</span></div>
+        </div>
+
+        <div class="amount-row">
+          <span class="btn secondary">−10</span>
+          <div class="amount-box">
+            <div class="val">130 <span style="font-size:26px">л</span></div>
+            <div class="sum">≈ 9 322 ₽</div>
+          </div>
+          <span class="btn secondary disabled">+10</span>
+        </div>
+        <div class="stepper">
+          <span class="btn secondary">−50</span>
+          <span class="btn secondary disabled">+50</span>
+        </div>
+        <div class="rec-row">
+          <span class="btn recommend on">Рекомендовано: 130 л</span>
+          <span class="help">?</span>
+        </div>
+      </div>
+      <div class="bottom"><span class="btn">К подтверждению · 130 л</span></div>
+    </div>
+  </div>
+
+  <!-- 5b Выше бюджета -->
+  <div class="frame">
+    <div class="label">5b · Выше бюджета</div>
+    <div class="screen">
+      <div class="status"><span>9:44</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="content">
+        <div class="topbar"><span class="back">←</span><h2>Сколько лить</h2></div>
+        <div class="steps">
+          <span class="s done">Топливо</span>
+          <span class="s done">АЗС</span>
+          <span class="s done">Колонка</span>
+          <span class="s now">Объём</span>
+          <span class="s">Налив</span>
+        </div>
+        <div class="card">
+          <div class="muted">Колесо №281 · Б (2) · ДТ ЭКО</div>
+          <div class="row" style="margin-top:10px;font-size:16px"><span class="muted">Цена</span><span>71,71 ₽/л</span></div>
+          <div class="row" style="font-size:16px"><span class="muted">Лимит АЗС на одну заправку</span><span>до 150 л</span></div>
+          <div class="row" style="font-size:16px"><span class="muted">Доступно</span><span>9 340 ₽</span></div>
+        </div>
+        <div class="amount-row">
+          <span class="btn secondary">−10</span>
+          <div class="amount-box">
+            <div class="val">100 <span style="font-size:26px">л</span></div>
+            <div class="sum">≈ 7 171 ₽</div>
+          </div>
+          <span class="btn secondary">+10</span>
+        </div>
+        <div class="stepper">
+          <span class="btn secondary">−50</span>
+          <span class="btn secondary">+50</span>
+        </div>
+        <div class="rec-row">
+          <span class="btn recommend">Рекомендовано: 130 л</span>
+          <span class="help">?</span>
+        </div>
+        <div class="tip-save">Дальше — выгоднее оставить запас на рейс. При сбое холд может вернуться не сразу.</div>
+      </div>
+      <div class="bottom"><span class="btn">К подтверждению · 100 л</span></div>
+    </div>
+  </div>
+
+  <!-- 5c Лимит АЗС по карте -->
+  <div class="frame">
+    <div class="label">5c · Лимит на одну заправку</div>
+    <div class="screen">
+      <div class="status"><span>9:44</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="content">
+        <div class="topbar"><span class="back">←</span><h2>Сколько лить</h2></div>
+        <div class="steps">
+          <span class="s done">Топливо</span>
+          <span class="s done">АЗС</span>
+          <span class="s done">Колонка</span>
+          <span class="s now">Объём</span>
+          <span class="s">Налив</span>
+        </div>
+        <div class="card">
+          <div class="muted">Колесо №281 · Б (2) · ДТ ЭКО</div>
+          <div class="row" style="margin-top:10px;font-size:16px"><span class="muted">Цена</span><span>71,71 ₽/л</span></div>
+          <div class="row" style="font-size:16px"><span class="muted">Лимит АЗС на одну заправку</span><span>до 150 л</span></div>
+          <div class="row" style="font-size:16px"><span class="muted">Доступно</span><span>12 000 ₽</span></div>
+        </div>
+        <div class="amount-row">
+          <span class="btn secondary">−10</span>
+          <div class="amount-box">
+            <div class="val">150 <span style="font-size:26px">л</span></div>
+            <div class="sum">≈ 10 756 ₽</div>
+          </div>
+          <span class="btn secondary disabled">+10</span>
+        </div>
+        <div class="stepper">
+          <span class="btn secondary">−50</span>
+          <span class="btn secondary disabled">+50</span>
+        </div>
+        <div class="rec-row">
+          <span class="btn recommend">Рекомендовано: 130 л</span>
+          <span class="help">?</span>
+        </div>
+        <div class="hint">Лимит на одну заправку — 150 литров. Нужно больше? Оформите ещё один заказ.</div>
+      </div>
+      <div class="bottom"><span class="btn">К подтверждению · 150 л</span></div>
+    </div>
+  </div>
+
+  <!-- 5? Справка бюджет -->
+  <div class="frame">
+    <div class="label">5? · Справка · бюджет</div>
+    <div class="screen">
+      <div class="status"><span>9:44</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="overlay">
+        <div class="sheet">
+          <h3>Рекомендуемый расход</h3>
+          <div class="muted">Бюджет — 50% от исходного лимита рейса (из 20 000 ₽ → 10 000 ₽), чтобы хватило на весь рейс.</div>
+          <div class="muted"><b>Рекомендовано</b> подставляет объём по бюджету (если он меньше лимита АЗС и доступных денег).</div>
+          <div class="muted">Выше бюджета заказать можно. Выше доступного лимита или лимита АЗС — округлим вниз, кнопки «+» отключим.</div>
+          <span class="btn">Понятно</span>
+        </div>
+      </div>
+      <div class="content"><div class="topbar"><span class="back">←</span><h2>Сколько лить</h2></div></div>
+    </div>
+  </div>
+
+  <!-- 6 Подтверждение -->
+  <div class="frame">
+    <div class="label">6 · Подтверждение</div>
+    <div class="screen">
+      <div class="status"><span>9:45</span><span class="sig">▮▮ ▭▭</span></div>
+      <div class="content">
+        <div class="topbar"><span class="back">←</span><h2>Проверьте заказ</h2></div>
+        <div class="steps">
+          <span class="s done">Топливо</span>
+          <span class="s done">АЗС</span>
+          <span class="s done">Колонка</span>
+          <span class="s done">Объём</span>
+          <span class="s now">Налив</span>
+        </div>
+        <div class="card summary">
+          <div class="row"><span>АЗС</span><span>Колесо №281</span></div>
+          <div class="row"><span>Колонка</span><span>Б · 2</span></div>
+          <div class="row"><span>Топливо</span><span>ДТ ЭКО</span></div>
+          <div class="row"><span>Объём</span><span>111 л</span></div>
+          <div class="row"><span>Цена</span><span>71,71 ₽/л</span></div>
+          <div class="row"><span>В холд</span><span>7 960 ₽</span></div>
+        </div>
+        <div class="hint">Нажмите один раз. Кнопка сразу станет недоступной — второй заказ не уйдёт.</div>
+      </div>
+      <div class="bottom">
+        <span class="btn">Заправить · 7 960 ₽</span>
+        <span class="btn ghost">Назад</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6b После нажатия -->
+  <div class="frame">
+    <div class="label">6b · Кнопка заблокирована</div>
+    <div class="screen">
+      <div class="status"><span>9:45</span><span class="sig">▮▮ ▭▭</span></div>
+      <div class="content">
+        <div class="topbar"><span class="back">←</span><h2>Проверьте заказ</h2></div>
+        <div class="steps">
+          <span class="s done">Топливо</span>
+          <span class="s done">АЗС</span>
+          <span class="s done">Колонка</span>
+          <span class="s done">Объём</span>
+          <span class="s now">Налив</span>
+        </div>
+        <div class="card summary">
+          <div class="row"><span>АЗС</span><span>Колесо №281</span></div>
+          <div class="row"><span>Колонка</span><span>Б · 2</span></div>
+          <div class="row"><span>Топливо</span><span>ДТ ЭКО</span></div>
+          <div class="row"><span>Объём</span><span>111 л</span></div>
+          <div class="row"><span>Цена</span><span>71,71 ₽/л</span></div>
+          <div class="row"><span>В холд</span><span>7 960 ₽</span></div>
+        </div>
+        <div class="hint">Отправляем заказ… Не нажимайте снова.</div>
+      </div>
+      <div class="bottom">
+        <span class="btn sending">Отправляем…</span>
+        <span class="btn ghost disabled">Назад</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7 Пистолет + таймер -->
+  <div class="frame">
+    <div class="label">7 · Пистолет + таймер</div>
+    <div class="screen">
+      <div class="status"><span>9:45</span><span class="sig weak">▮ ▭▭▭</span></div>
+      <div class="banner warn">Связь слабая · статус догоним по сети</div>
+      <div class="content">
+        <div class="steps">
+          <span class="s done">Топливо</span>
+          <span class="s done">АЗС</span>
+          <span class="s done">Колонка</span>
+          <span class="s done">Объём</span>
+          <span class="s now">Налив</span>
+        </div>
+        <div class="center">
+          <div class="nozzle" aria-hidden="true">
+            <svg viewBox="0 0 140 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="18" y="28" width="52" height="88" rx="10" fill="#FFF0E6" stroke="#FF6200" stroke-width="4"/>
+              <rect x="28" y="40" width="32" height="20" rx="4" fill="#FF6200"/>
+              <path d="M70 48h22c8 0 14 6 14 14v18" stroke="#111" stroke-width="6" stroke-linecap="round"/>
+              <path d="M106 80c10 0 16 8 16 18v10" stroke="#111" stroke-width="6" stroke-linecap="round"/>
+              <rect x="112" y="106" width="18" height="28" rx="5" fill="#111"/>
+              <path d="M44 78v28" stroke="#FF6200" stroke-width="5" stroke-linecap="round"/>
+              <circle cx="44" cy="70" r="5" fill="#FF6200"/>
+            </svg>
+          </div>
+          <div class="big">Вставьте пистолет</div>
+          <div class="timer">0:48</div>
+          <div class="timer-label">до отмены заказа</div>
+          <div class="card" style="width:100%;text-align:left">
+            <div class="row"><span class="muted">Колонка</span><span>Б · 2</span></div>
+            <div class="row" style="margin-top:8px"><span class="muted">В холде</span><span>7 960 ₽</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="bottom"><span class="btn danger">Отменить заказ</span></div>
+    </div>
+  </div>
+
+  <!-- 8 Налив -->
+  <div class="frame">
+    <div class="label">8 · Налив</div>
+    <div class="screen">
+      <div class="status"><span>9:46</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="content">
+        <div class="steps">
+          <span class="s done">Топливо</span>
+          <span class="s done">АЗС</span>
+          <span class="s done">Колонка</span>
+          <span class="s done">Объём</span>
+          <span class="s now">Налив</span>
+        </div>
+        <div class="center">
+          <div class="muted" style="font-weight:800">Идёт налив</div>
+          <div class="live-wrap">
+            <span class="live">48</span>
+            <span class="live-max">/ 111 л</span>
+          </div>
+          <div class="progress" style="width:100%;height:14px;border-radius:7px;margin-top:4px"><i style="width:43%"></i></div>
+          <div class="card" style="width:100%;text-align:left;margin-top:8px">
+            <div class="row"><span class="muted">Сейчас</span><span>≈ 3 442 ₽</span></div>
+            <div class="row" style="margin-top:10px"><span class="muted">В холде</span><span>7 960 ₽</span></div>
+          </div>
+          <div class="hint">Отменить нельзя. Новый заказ не создавайте.</div>
+        </div>
+      </div>
+      <div class="bottom"><span class="btn secondary disabled">Отмена недоступна</span></div>
+    </div>
+  </div>
+
+  <!-- 9 Итог -->
+  <div class="frame">
+    <div class="label">9 · Итог</div>
+    <div class="screen">
+      <div class="status"><span>9:48</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="content">
+        <div class="center">
+          <div class="okicon">✓</div>
+          <div class="big">Заправка завершена</div>
+          <div class="card summary" style="width:100%;text-align:left">
+            <div class="row"><span>АЗС</span><span>Колесо №281</span></div>
+            <div class="row"><span>Залито</span><span>111 л</span></div>
+            <div class="row"><span>Списано</span><span>7 960 ₽</span></div>
+            <div class="row"><span>Остаток лимита</span><span>1 380 ₽</span></div>
+          </div>
+          <div class="muted">Чек утром у диспетчера — в приложении его нет</div>
+        </div>
+      </div>
+      <div class="bottom">
+        <span class="btn">На главную</span>
+        <span class="btn secondary">Заправить ещё · другой бак</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section"><h2>Связь и ошибки</h2></div>
+<div class="canvas">
+
+  <!-- N1 Главный офлайн -->
+  <div class="frame">
+    <div class="label">N1 · Главный без сети</div>
+    <div class="screen">
+      <div class="status"><span>9:41</span><span class="sig none">▭▭▭▭ нет сети</span></div>
+      <div class="banner bad">Нет связи · показаны последние данные</div>
+      <div class="content">
+        <div class="title">Заправка в рейсе</div>
+        <div class="card">
+          <div class="muted">Текущий рейс · 16 октября</div>
+          <div class="route">Москва → Казань</div>
+          <div class="muted">Тягач А123ВС 77</div>
+        </div>
+        <div class="card">
+          <div class="muted">Доступно · кэш</div>
+          <div class="limit">9 340 ₽</div>
+          <div class="muted">из 20 000 ₽</div>
+        </div>
+        <div class="hint bad">Новый заказ без сети не отправим. Если заправка уже шла — она на АЗС продолжится.</div>
+      </div>
+      <div class="bottom">
+        <span class="btn secondary">Повторить связь</span>
+        <span class="btn disabled">Заправиться</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- N2 Не загрузился список -->
+  <div class="frame">
+    <div class="label">N2 · Не загрузились АЗС</div>
+    <div class="screen">
+      <div class="status"><span>9:42</span><span class="sig none">▭▭▭▭</span></div>
+      <div class="content">
+        <div class="topbar"><span class="back">←</span><h2>Выбор АЗС</h2></div>
+        <div class="steps">
+          <span class="s done">Топливо</span>
+          <span class="s now">АЗС</span>
+          <span class="s">Колонка</span>
+          <span class="s">Объём</span>
+          <span class="s">Налив</span>
+        </div>
+        <div class="center">
+          <div class="warnicon">!</div>
+          <div class="big">Нет связи с сервером</div>
+          <div class="muted" style="max-width:280px">Список АЗС не загрузился. Заказ ещё не создавался — холда нет.</div>
+        </div>
+      </div>
+      <div class="bottom">
+        <span class="btn">Повторить</span>
+        <span class="btn secondary">На главную</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- N3 Обрыв до сервера -->
+  <div class="frame">
+    <div class="label">N3 · Обрыв до сервера</div>
+    <div class="screen">
+      <div class="status"><span>9:45</span><span class="sig none">▭▭▭▭</span></div>
+      <div class="content">
+        <div class="center">
+          <div class="warnicon">!</div>
+          <div class="big">Запрос не дошёл</div>
+          <div class="muted" style="max-width:300px">Связь пропала до ответа. Скорее всего заказ не создан. Можно повторить с тем же id — второго холда не будет.</div>
+          <div class="card" style="width:100%;text-align:left">
+            <div class="muted sm">clientRequestId</div>
+            <div class="muted" style="color:var(--ink);font-weight:800;margin-top:4px">req_7f3a · 111 л · колонка 2</div>
+          </div>
+        </div>
+      </div>
+      <div class="bottom">
+        <span class="btn">Повторить тот же заказ</span>
+        <span class="btn secondary">Проверить активную заправку</span>
+        <span class="btn ghost">Назад</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- N4 Нет ответа — мог уйти -->
+  <div class="frame">
+    <div class="label">N4 · Нет ответа · заказ мог уйти</div>
+    <div class="screen">
+      <div class="status"><span>9:45</span><span class="sig none">▭▭▭▭</span></div>
+      <div class="content">
+        <div class="center">
+          <div class="warnicon">!</div>
+          <div class="big">Нет ответа сервера</div>
+          <div class="muted" style="max-width:300px">Заказ мог уже уйти на АЗС. Не создавайте новый — будет второй холд.</div>
+          <div class="card" style="width:100%;text-align:left">
+            <div class="muted sm">Сохранён id запроса</div>
+            <div class="muted" style="color:var(--ink);font-weight:800;margin-top:4px">req_7f3a · 111 л · колонка 2</div>
+          </div>
+        </div>
+      </div>
+      <div class="bottom">
+        <span class="btn">Проверить статус</span>
+        <span class="btn secondary">Повторить тот же заказ</span>
+        <span class="btn ghost">Закрыть</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- N5 Пистолет офлайн -->
+  <div class="frame">
+    <div class="label">N5 · Пистолет без связи</div>
+    <div class="screen">
+      <div class="status"><span>9:45</span><span class="sig none">▭▭▭▭</span></div>
+      <div class="banner bad">Нет связи · заказ на АЗС уже принят</div>
+      <div class="content">
+        <div class="center">
+          <div class="nozzle" aria-hidden="true">
+            <svg viewBox="0 0 140 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="18" y="28" width="52" height="88" rx="10" fill="#FFF0E6" stroke="#FF6200" stroke-width="4"/>
+              <rect x="28" y="40" width="32" height="20" rx="4" fill="#FF6200"/>
+              <path d="M70 48h22c8 0 14 6 14 14v18" stroke="#111" stroke-width="6" stroke-linecap="round"/>
+              <path d="M106 80c10 0 16 8 16 18v10" stroke="#111" stroke-width="6" stroke-linecap="round"/>
+              <rect x="112" y="106" width="18" height="28" rx="5" fill="#111"/>
+            </svg>
+          </div>
+          <div class="big">Вставьте пистолет</div>
+          <div class="timer" style="opacity:.55">—:——</div>
+          <div class="timer-label">таймер обновим, когда сеть вернётся</div>
+          <div class="hint">Не создавайте новый заказ. Отмена через приложение сейчас может не пройти.</div>
+        </div>
+      </div>
+      <div class="bottom">
+        <span class="btn secondary">Обновить статус</span>
+        <span class="btn danger disabled">Отменить · нет сети</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- N6 Налив офлайн -->
+  <div class="frame">
+    <div class="label">N6 · Налив без связи</div>
+    <div class="screen">
+      <div class="status"><span>9:46</span><span class="sig none">▭▭▭▭</span></div>
+      <div class="banner bad">Нет связи · налив идёт на АЗС, цифры догонят</div>
+      <div class="content">
+        <div class="center">
+          <div class="muted" style="font-weight:800">Последний известный объём</div>
+          <div class="live-wrap" style="opacity:.7">
+            <span class="live">48</span>
+            <span class="live-max">/ 111 л</span>
+          </div>
+          <div class="progress" style="width:100%;height:14px;opacity:.5"><i style="width:43%"></i></div>
+          <div class="hint">Не создавайте новый заказ. Когда сеть вернётся — подтянем факт.</div>
+        </div>
+      </div>
+      <div class="bottom"><span class="btn secondary">Обновить статус</span></div>
+    </div>
+  </div>
+
+  <!-- N7 Poll fail -->
+  <div class="frame">
+    <div class="label">N7 · Не обновился статус</div>
+    <div class="screen">
+      <div class="status"><span>9:46</span><span class="sig weak">▮ ▭▭▭</span></div>
+      <div class="banner warn">Связь слабая · не удалось обновить статус</div>
+      <div class="content">
+        <div class="center">
+          <div class="warnicon">!</div>
+          <div class="big">Статус не обновился</div>
+          <div class="muted" style="max-width:300px">Последнее известное: ожидание пистолета · 111 л в холде. Заправка на АЗС могла уже пойти.</div>
+          <div class="card" style="width:100%;text-align:left">
+            <div class="row"><span class="muted">Заказ</span><span>fu_k2m9…</span></div>
+            <div class="row" style="margin-top:8px"><span class="muted">Холд</span><span>7 960 ₽</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="bottom">
+        <span class="btn">Повторить запрос статуса</span>
+        <span class="btn ghost">Подождать</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- N8 Отмена не прошла -->
+  <div class="frame">
+    <div class="label">N8 · Отмена не прошла</div>
+    <div class="screen">
+      <div class="status"><span>9:45</span><span class="sig none">▭▭▭▭</span></div>
+      <div class="content">
+        <div class="center">
+          <div class="badicon">!</div>
+          <div class="big">Отмена не отправилась</div>
+          <div class="muted" style="max-width:300px">Нет связи. Заказ на АЗС мог остаться активным — вставьте пистолет или дождитесь сети и проверьте статус. Не оформляйте новый.</div>
+        </div>
+      </div>
+      <div class="bottom">
+        <span class="btn">Проверить статус</span>
+        <span class="btn secondary">Повторить отмену</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- N9 Связь вернулась -->
+  <div class="frame">
+    <div class="label">N9 · Связь вернулась</div>
+    <div class="screen">
+      <div class="status"><span>9:47</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="banner ok" style="background:var(--ok-soft);color:var(--ok)">Связь есть · статус обновлён</div>
+      <div class="content">
+        <div class="center">
+          <div class="okicon">✓</div>
+          <div class="big">Догоняем статус</div>
+          <div class="muted" style="max-width:300px">Налив уже шёл на АЗС. Показали актуальные литры.</div>
+          <div class="live-wrap">
+            <span class="live">96</span>
+            <span class="live-max">/ 111 л</span>
+          </div>
+          <div class="progress" style="width:100%;height:14px"><i style="width:86%"></i></div>
+        </div>
+      </div>
+      <div class="bottom"><span class="btn secondary disabled">Отмена недоступна</span></div>
+    </div>
+  </div>
+
+  <!-- N10 Активная найдена при входе -->
+  <div class="frame">
+    <div class="label">N10 · Нашли активную при входе</div>
+    <div class="screen">
+      <div class="status"><span>9:50</span><span class="sig">▮▮▮ ▭</span></div>
+      <div class="overlay">
+        <div class="sheet">
+          <h3>Есть незавершённая заправка</h3>
+          <div class="muted">Похоже, прошлый заказ ушёл при обрыве связи. Открыть его — не создавать новый.</div>
+          <div class="card summary">
+            <div class="row"><span>АЗС</span><span>Колесо №281</span></div>
+            <div class="row"><span>Статус</span><span>ожидание пистолета</span></div>
+            <div class="row"><span>В холде</span><span>7 960 ₽</span></div>
+          </div>
+          <span class="btn">Открыть заправку</span>
+          <span class="btn secondary">Позже</span>
+        </div>
+      </div>
+      <div class="content"><div class="title">Заправка в рейсе</div></div>
+    </div>
+  </div>
+
+</div>
