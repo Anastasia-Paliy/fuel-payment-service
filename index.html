@@ -81,6 +81,31 @@
         gap: 12px;
         min-height: 0;
       }
+      /* Колонка на весь экран (список АЗС со скроллом) */
+      .screen-body.stack {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .card.wide {
+        width: 100%;
+      }
+      .row.mt-sm {
+        margin-top: 6px;
+      }
+      .row.mt-md,
+      .mt-md {
+        margin-top: 10px;
+      }
+      .price.t-cheap {
+        color: var(--cheap);
+      }
+      .price.t-mid {
+        color: var(--mid);
+      }
+      .price.t-dear {
+        color: var(--dear);
+      }
       .scroll-body {
         flex: 1;
         min-height: 0;
@@ -98,7 +123,7 @@
       }
       .title {
         font-size: 26px;
-        font-weight: 800;
+        font-weight: 700;
         margin: 0;
       }
       .topbar {
@@ -110,7 +135,7 @@
       .topbar h2 {
         margin: 0;
         font-size: 20px;
-        font-weight: 800;
+        font-weight: 700;
         flex: 1;
         line-height: 1.2;
       }
@@ -128,7 +153,7 @@
       .hold-link,
       .linkish {
         font-size: 14px;
-        font-weight: 800;
+        font-weight: 700;
         color: var(--brand);
         background: none;
         border: none;
@@ -160,12 +185,12 @@
       }
       .route {
         font-size: 22px;
-        font-weight: 800;
+        font-weight: 700;
         margin: 4px 0;
       }
       .limit {
-        font-size: 40px;
-        font-weight: 800;
+        font-size: 34px;
+        font-weight: 700;
         letter-spacing: -0.5px;
         line-height: 1.05;
       }
@@ -179,7 +204,104 @@
       .progress > i {
         display: block;
         height: 100%;
+        width: var(--pct, 0%);
         background: var(--brand);
+      }
+      .progress.stacked {
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+      }
+      .progress.stacked .seg-avail {
+        display: block;
+        height: 100%;
+        background: var(--brand);
+        flex: none;
+      }
+      .progress.stacked .seg-hold {
+        display: block;
+        height: 100%;
+        background: #374151;
+        flex: none;
+      }
+      .hist-item.active-fuel {
+        border: 2px solid var(--brand);
+        background: var(--brand-soft);
+      }
+      .hist-open {
+        margin-top: 10px;
+      }
+      .topbar .title {
+        flex: 1;
+        margin: 0;
+        font-size: 26px;
+        font-weight: 700;
+      }
+      .topbar .icon-refresh {
+        flex: none;
+        width: 48px;
+        height: 48px;
+        padding: 0;
+        border: none;
+        border-radius: 14px;
+        background: var(--bg);
+        cursor: pointer;
+        color: var(--ink);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        line-height: 1;
+        font-weight: 700;
+      }
+      .topbar .icon-refresh:disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
+      .topbar .icon-refresh .spinner {
+        width: 22px;
+        height: 22px;
+        border-width: 2.5px;
+        flex: none;
+      }
+      .price-col {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+        min-width: 0;
+      }
+      .price-col .fuel-lab {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--sub);
+        text-align: right;
+        line-height: 1.2;
+      }
+      .cmp .cmp-offer {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .cmp .cmp-offer + .cmp-offer {
+        margin-top: 14px;
+      }
+      .cmp .cmp-left {
+        min-width: 0;
+        flex: 1;
+      }
+      .cmp .cmp-left .muted.sm {
+        margin-top: 4px;
+        line-height: 1.35;
+        word-break: break-word;
+      }
+      .cmp .price-dear,
+      .cmp .price-good {
+        flex: none;
+        white-space: nowrap;
+        line-height: 1.2;
+        padding-top: 1px;
       }
       .progress.lg {
         height: 14px;
@@ -194,7 +316,7 @@
         text-align: center;
         background: var(--brand);
         color: #fff;
-        font-weight: 800;
+        font-weight: 700;
         font-size: 18px;
         border: none;
         border-radius: 18px;
@@ -207,6 +329,10 @@
       .btn:disabled {
         opacity: 0.4;
         cursor: default;
+      }
+      .btn:disabled.busy,
+      .btn.sending:disabled {
+        opacity: 0.55;
       }
       .btn.secondary {
         background: #fff;
@@ -248,7 +374,7 @@
         align-items: center;
         justify-content: center;
         font-size: 20px;
-        font-weight: 800;
+        font-weight: 700;
         color: var(--sub);
         cursor: pointer;
         font-family: inherit;
@@ -256,7 +382,7 @@
       }
       .section-label {
         font-size: 15px;
-        font-weight: 800;
+        font-weight: 700;
         margin-top: 4px;
       }
       .hist {
@@ -279,17 +405,31 @@
       }
       .hist-item .name {
         font-size: 16px;
-        font-weight: 800;
+        font-weight: 700;
+      }
+      .hist-item .top + .name {
+        margin-top: 8px;
       }
       .hist-item .st {
         font-size: 14px;
-        font-weight: 800;
+        font-weight: 700;
       }
       .hist-item .st.ok {
         color: var(--ok);
       }
+      .hist-item .st.underfill {
+        color: var(--warn);
+      }
       .hist-item .st.bad {
         color: var(--bad);
+      }
+      .hist-item .hist-formula {
+        text-align: right;
+        font-weight: 700;
+      }
+      .hist-item .hist-sum {
+        font-size: 1.12em;
+        font-weight: 700;
       }
       .overlay {
         position: absolute;
@@ -314,7 +454,14 @@
       .sheet h3 {
         margin: 0;
         font-size: 22px;
-        font-weight: 800;
+        font-weight: 700;
+      }
+      .sheet .copy {
+        text-align: justify;
+        text-justify: inter-word;
+        hyphens: auto;
+        -webkit-hyphens: auto;
+        overflow-wrap: anywhere;
       }
       .sheet .alt {
         background: var(--ok-soft);
@@ -324,7 +471,7 @@
       .sheet .alt b {
         display: block;
         font-size: 16px;
-        font-weight: 800;
+        font-weight: 700;
         color: var(--ok);
         margin-bottom: 4px;
       }
@@ -340,7 +487,7 @@
       }
       .big {
         font-size: 24px;
-        font-weight: 800;
+        font-weight: 700;
         line-height: 1.2;
       }
       .okicon,
@@ -353,7 +500,7 @@
         align-items: center;
         justify-content: center;
         font-size: 42px;
-        font-weight: 800;
+        font-weight: 700;
       }
       .okicon {
         background: var(--ok-soft);
@@ -414,7 +561,7 @@
         min-width: 0;
         text-align: center;
         font-size: 11px;
-        font-weight: 800;
+        font-weight: 700;
         color: #94a3b8;
         position: relative;
         padding: 22px 2px 0;
@@ -469,7 +616,7 @@
         border-radius: 20px;
         background: var(--bg);
         border: 3px solid transparent;
-        font-weight: 800;
+        font-weight: 700;
         font-size: 17px;
         display: flex;
         flex-direction: column;
@@ -502,7 +649,7 @@
         padding: 12px 8px;
         border-radius: 11px;
         font-size: 14px;
-        font-weight: 800;
+        font-weight: 700;
         color: var(--sub);
         background: transparent;
         border: none;
@@ -524,7 +671,7 @@
       }
       .radius b {
         font-size: 15px;
-        font-weight: 800;
+        font-weight: 700;
         white-space: nowrap;
       }
       .radius .seg {
@@ -546,12 +693,12 @@
       }
       .fuel-filter b {
         font-size: 16px;
-        font-weight: 800;
+        font-weight: 700;
       }
       .fuel-filter button {
         margin-left: auto;
         font-size: 14px;
-        font-weight: 800;
+        font-weight: 700;
         color: var(--brand);
         background: none;
         border: none;
@@ -577,13 +724,13 @@
         background: var(--brand);
         color: #fff;
         font-size: 13px;
-        font-weight: 800;
+        font-weight: 700;
         padding: 5px 10px;
         border-radius: 8px;
       }
       .near-block .price {
         font-size: 26px;
-        font-weight: 900;
+        font-weight: 700;
         letter-spacing: -0.4px;
       }
       .station {
@@ -603,6 +750,10 @@
         font-family: inherit;
         color: inherit;
       }
+      .station:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
       .station.cheap {
         border-left-color: var(--cheap);
       }
@@ -614,13 +765,13 @@
       }
       .station .name {
         font-size: 17px;
-        font-weight: 800;
+        font-weight: 700;
         line-height: 1.25;
       }
       .station .dist,
       .station .price {
         font-size: 20px;
-        font-weight: 800;
+        font-weight: 700;
       }
       .station .meta {
         display: flex;
@@ -631,7 +782,7 @@
       .pill-tag {
         display: inline-flex;
         font-size: 13px;
-        font-weight: 800;
+        font-weight: 700;
         padding: 5px 10px;
         border-radius: 8px;
         background: #fff;
@@ -668,7 +819,7 @@
         flex-direction: column;
         justify-content: center;
         gap: 2px;
-        font-weight: 800;
+        font-weight: 700;
         font-size: 20px;
         cursor: pointer;
         font-family: inherit;
@@ -718,14 +869,14 @@
       }
       .amount-box .val {
         font-size: 48px;
-        font-weight: 800;
+        font-weight: 700;
         letter-spacing: -1px;
         line-height: 1;
       }
       .amount-box .sum {
         margin-top: 6px;
         font-size: 20px;
-        font-weight: 800;
+        font-weight: 700;
       }
       .stepper {
         display: grid;
@@ -754,7 +905,7 @@
         display: block;
         margin-top: 4px;
         font-size: 18px;
-        font-weight: 800;
+        font-weight: 700;
         color: var(--ink);
       }
       .budget .help {
@@ -799,17 +950,17 @@
       }
       .live {
         font-size: 56px;
-        font-weight: 800;
+        font-weight: 700;
         letter-spacing: -1px;
       }
       .live-max {
         font-size: 28px;
-        font-weight: 800;
+        font-weight: 700;
         color: var(--sub);
       }
       .timer {
         font-size: 44px;
-        font-weight: 800;
+        font-weight: 700;
         font-variant-numeric: tabular-nums;
       }
       .timer-label {
@@ -843,7 +994,7 @@
         border: none;
         background: transparent;
         font-size: 48px;
-        font-weight: 800;
+        font-weight: 700;
         letter-spacing: -1px;
         line-height: 1;
         text-align: center;
@@ -860,17 +1011,17 @@
       }
       .vol-unit {
         font-size: 18px;
-        font-weight: 800;
+        font-weight: 700;
         color: var(--sub);
         margin-top: 2px;
       }
       .price-dear {
         color: var(--dear) !important;
-        font-weight: 800;
+        font-weight: 700;
       }
       .price-good {
         color: var(--cheap) !important;
-        font-weight: 800;
+        font-weight: 700;
       }
       .cmp .row {
         margin-top: 0;
@@ -897,12 +1048,12 @@
       }
       .cmp .lbl-dear {
         color: var(--dear);
-        font-weight: 800;
+        font-weight: 700;
         font-size: 16px;
       }
       .cmp .lbl-good {
         color: var(--cheap);
-        font-weight: 800;
+        font-weight: 700;
         font-size: 16px;
       }
       .cmp .price-dear,
@@ -914,12 +1065,57 @@
       }
       .btn.dear-go {
         color: var(--bad) !important;
-        font-weight: 800;
+        font-weight: 700;
       }
     </style>
   </head>
   <body>
     <div id="app"></div>
+
+    <!-- Разметка/SVG живут здесь; app.js только клонирует и наполняет данными -->
+    <template id="tpl-nozzle">
+      <div class="nozzle">
+        <svg
+          viewBox="0 0 140 140"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <rect
+            x="18"
+            y="28"
+            width="52"
+            height="88"
+            rx="10"
+            fill="#FFF0E6"
+            stroke="#FF6200"
+            stroke-width="4"
+          />
+          <rect x="28" y="40" width="32" height="20" rx="4" fill="#FF6200" />
+          <path
+            d="M70 48h22c8 0 14 6 14 14v18"
+            stroke="#111"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
+          <path
+            d="M106 80c10 0 16 8 16 18v10"
+            stroke="#111"
+            stroke-width="6"
+            stroke-linecap="round"
+          />
+          <rect x="112" y="106" width="18" height="28" rx="5" fill="#111" />
+          <path
+            d="M44 78v28"
+            stroke="#FF6200"
+            stroke-width="5"
+            stroke-linecap="round"
+          />
+          <circle cx="44" cy="70" r="5" fill="#FF6200" />
+        </svg>
+      </div>
+    </template>
+
     <script src="fake-api.js"></script>
     <script src="app.js"></script>
   </body>

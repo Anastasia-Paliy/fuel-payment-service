@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Сценарии экранов — Заправка в рейсе</title>
+    <style>
+      :root {
+        --ink: #111;
+        --sub: #3f4a5a;
+        --line: #c5cad3;
+        --brand: #ff6200;
+        --ok: #15803d;
+        --warn: #a16207;
+        --bad: #b91c1c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: var(--ink);
+        background: #eef0f3;
+      }
+      header {
+        padding: 20px 28px 8px;
+        max-width: 1100px;
+      }
+      h1 { margin: 0 0 6px; font-size: 22px; }
+      header p { margin: 0; color: var(--sub); font-size: 14px; line-height: 1.45; max-width: 820px; }
+      .legend { display: flex; gap: 16px; padding: 12px 28px 0; font-size: 13px; color: var(--sub); flex-wrap: wrap; }
+      .legend b.base { color: var(--brand); }
+      .legend b.up { color: var(--bad); }
+      .legend b.down { color: var(--ok); }
+      .board {
+        display: flex;
+        align-items: flex-start;
+        gap: 0;
+        padding: 28px 20px 64px;
+        overflow-x: auto;
+      }
+      .step { display: flex; flex-direction: column; align-items: center; min-width: 210px; }
+      .arrow {
+        align-self: center;
+        min-width: 118px;
+        max-width: 150px;
+        text-align: center;
+        color: var(--brand);
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.25;
+        padding: 0 6px 78px;
+        position: relative;
+      }
+      .arrow::after {
+        content: "→";
+        display: block;
+        font-size: 22px;
+        line-height: 1;
+        margin-top: 4px;
+      }
+      .card {
+        width: 200px;
+        background: #fff;
+        border: 2px solid var(--brand);
+        border-radius: 16px;
+        padding: 10px 12px 12px;
+        box-shadow: 0 6px 16px rgba(17, 24, 39, 0.06);
+      }
+      .card h3 { margin: 0 0 6px; font-size: 14px; }
+      .card ul { margin: 0; padding-left: 16px; font-size: 12px; line-height: 1.35; color: #222; }
+      .fork { margin-top: 10px; width: 200px; display: flex; flex-direction: column; gap: 8px; }
+      .branch {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 8px 10px;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+      .branch .when {
+        display: block;
+        font-weight: 700;
+        color: var(--bad);
+        margin-bottom: 2px;
+      }
+      .branch.alt .when { color: var(--ok); }
+      .branch strong { font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Сценарии экранов</h1>
+      <p>
+        Оранжевая линия слева направо — базовый успешный заказ. От каждого экрана вниз и в карточках
+        «если…» — другие исходы. Условие написано над стрелкой базового шага и красным/зелёным в ответвлениях.
+      </p>
+    </header>
+    <div class="legend">
+      <span><b class="base">→</b> базовый переход</span>
+      <span><b class="up">красное</b> сбой, сеть, отказ</span>
+      <span><b class="down">зелёное</b> развилка без ошибки</span>
+    </div>
+    <div class="board">
+      <div class="step">
+        <div class="card">
+          <h3>Старт</h3>
+          <ul>
+            <li>Спиннер «Загружаем…»</li>
+            <li>getTrip + getActiveFueling</li>
+            <li>догон истории с active</li>
+          </ul>
+        </div>
+        <div class="fork">
+          <div class="branch"><span class="when">getTrip упал, кэш есть</span>Главная: «Нет связи · последние данные», «Заправиться» выключена</div>
+          <div class="branch"><span class="when">нет ни сети, ни кэша</span>Главная: «Не удалось загрузить рейс»</div>
+          <div class="branch alt"><span class="when">есть активный заказ</span>Карточка «Активная заправка», «К заправке», polling</div>
+        </div>
+      </div>
+      <div class="arrow">рейс загрузился</div>
+
+      <div class="step">
+        <div class="card">
+          <h3>Главная</h3>
+          <ul>
+            <li>Рейс, доступно, полоска + холд</li>
+            <li>Активная или последняя</li>
+            <li>↻ и «Заправиться»</li>
+          </ul>
+        </div>
+        <div class="fork">
+          <div class="branch alt"><span class="when">«Что такое холд?»</span>Шторка про холд</div>
+          <div class="branch alt"><span class="when">«Вся история»</span>Адрес, топливо · колонка; у active — «К заправке»; недолив: списано + возврат</div>
+          <div class="branch alt"><span class="when">несколько active в истории</span>«Активные заправки»: у каждой «К заправке», полоска суммирует холды</div>
+          <div class="branch"><span class="when">↻ и нет сети</span>Баннер «Нет связи», прошлый рейс на экране</div>
+          <div class="branch alt"><span class="when">сменился trip.id</span>Шторка «Новый рейс», история сброшена</div>
+          <div class="branch alt"><span class="when">«Заправиться», а getActiveFueling вернул заказ</span>Процесс текущего заказа · «Уже есть заказ · второй холд не создан»</div>
+        </div>
+      </div>
+      <div class="arrow">Заправиться<br />нет активного · getTrip + getActiveFueling</div>
+
+      <div class="step">
+        <div class="card">
+          <h3>Топливо</h3>
+          <ul>
+            <li>Чипы групп</li>
+            <li>«К выбору АЗС»</li>
+          </ul>
+        </div>
+        <div class="fork">
+          <div class="branch alt"><span class="when">←</span>На главную (свежий getTrip)</div>
+          <div class="branch"><span class="when">список АЗС не загрузился</span>Сеть: «холда нет» · Повторить / На главную</div>
+        </div>
+      </div>
+      <div class="arrow">К выбору АЗС<br />getStations + геолокация</div>
+
+      <div class="step">
+        <div class="card">
+          <h3>АЗС</h3>
+          <ul>
+            <li>Радиус, сортировка</li>
+            <li>Ближайшая, если ≤ 1,5 км</li>
+            <li>Цена и имя топлива</li>
+          </ul>
+        </div>
+        <div class="fork">
+          <div class="branch alt"><span class="when">mid/дорого и есть дешевле</span>Шторка «Не упустите выгодную АЗС»</div>
+          <div class="branch alt"><span class="when">выгодная / дешёвая / «всё равно»</span>Карточка колонок</div>
+          <div class="branch"><span class="when">↻ и обрыв</span>Тот же экран сети списка</div>
+        </div>
+      </div>
+      <div class="arrow">выбрана АЗС<br />getStation</div>
+
+      <div class="step">
+        <div class="card">
+          <h3>Колонка</h3>
+          <ul>
+            <li>Свободные с нужным топливом</li>
+            <li>«Колесо»: А · 1</li>
+          </ul>
+        </div>
+        <div class="fork">
+          <div class="branch"><span class="when">getStation упал</span>Сеть списка, заказа ещё нет</div>
+          <div class="branch alt"><span class="when">назад</span>Снова список, свежие станции</div>
+        </div>
+      </div>
+      <div class="arrow">колонка выбрана</div>
+
+      <div class="step">
+        <div class="card">
+          <h3>Объём</h3>
+          <ul>
+            <li>Цена, лимит АЗС, доступно</li>
+            <li>±10 / ±50, рекомендовано</li>
+            <li>бюджет: min(50% left, 30% total)</li>
+            <li>↻ цена и лимит</li>
+          </ul>
+        </div>
+        <div class="fork">
+          <div class="branch alt"><span class="when">объём = litersMin</span>«Меньше N нельзя»</div>
+          <div class="branch alt"><span class="when">упор в лимит АЗС / деньги</span>Подсказка про ещё один заказ или доступно</div>
+          <div class="branch alt"><span class="when">выше мягкого бюджета</span>«Выгоднее оставить запас…» (прячется, если минимум уже выше бюджета)</div>
+          <div class="branch"><span class="when">не хватает на litersMin</span>Без ±, текст диспетчеру, «На главную»</div>
+        </div>
+      </div>
+      <div class="arrow">К подтверждению</div>
+
+      <div class="step">
+        <div class="card">
+          <h3>Проверка</h3>
+          <ul>
+            <li>АЗС, колонка, топливо</li>
+            <li>Объём, цена, холд, доступно</li>
+            <li>сначала getActiveFueling</li>
+            <li>«Заправить» один раз</li>
+          </ul>
+        </div>
+        <div class="fork">
+          <div class="branch alt"><span class="when">уже есть активный</span>Процесс · второй startFueling не шлём</div>
+          <div class="branch"><span class="when">getActiveFueling упал</span>Холд не создаём, ошибка на проверке</div>
+          <div class="branch"><span class="when">PRICE_CHANGED</span>Шторка: новая цена или другая АЗС. Холда нет</div>
+          <div class="branch"><span class="when">PUMP_BUSY</span>Шторка, выбор колонки заново</div>
+          <div class="branch"><span class="when">LIMIT_EXCEEDED</span>Шторка, к объёму</div>
+          <div class="branch"><span class="when">сеть после startFueling</span>«Заказ мог уйти» · проверить статус / тот же id</div>
+        </div>
+      </div>
+      <div class="arrow">startFueling<br />холд + запись в историю</div>
+
+      <div class="step">
+        <div class="card">
+          <h3>Процесс</h3>
+          <ul>
+            <li>accepted: ждём АЗС, отмена</li>
+            <li>waiting_nozzle: пистолет, 60 с</li>
+            <li>fueling: литры, отмена закрыта</li>
+          </ul>
+        </div>
+        <div class="fork">
+          <div class="branch alt"><span class="when">Отменить (accepted / waiting_nozzle)</span>Итог «Возвращён», холд целиком назад</div>
+          <div class="branch"><span class="when">нет пистолета ~60 с</span>Отмена PUMP_TIMEOUT</div>
+          <div class="branch"><span class="when">АЗС молчит ~6 с (FakeApi)</span>Отмена «АЗС не ответила»; налива не было. В бою холд может висеть дольше</div>
+          <div class="branch"><span class="when">налив идёт, связи нет</span>Баннер «цифры догонят»; отмена закрыта; на остаток — ждать / диспетчер</div>
+          <div class="branch"><span class="when">отмена не ушла</span>Сеть «проверьте статус», новый заказ не делать</div>
+        </div>
+      </div>
+      <div class="arrow">completed</div>
+
+      <div class="step">
+        <div class="card">
+          <h3>Итог</h3>
+          <ul>
+            <li>Успех: залито, списано, остаток</li>
+            <li>Чек у диспетчера</li>
+            <li>Другой бак / на главную</li>
+          </ul>
+        </div>
+        <div class="fork">
+          <div class="branch alt"><span class="when">factLiters &lt; заказ</span>История «Недолив»: списано по факту и возврат холда (на главной без возврата)</div>
+          <div class="branch"><span class="when">cancelled</span>«Заправка не удалась», причина, «Заказать снова»</div>
+          <div class="branch alt"><span class="when">На главную</span>Свежие getTrip и getActiveFueling, догон истории</div>
+          <div class="branch alt"><span class="when">Другой бак</span>Тот же сценарий на обновлённом limitLeft, если активного холда нет</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

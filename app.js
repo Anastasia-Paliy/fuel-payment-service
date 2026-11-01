@@ -1,7 +1,10 @@
 /**
  * Заправка в рейсе — прототип водительского UI (pure JS + FakeApi).
+ *
+ * Разделение: стили и статичная разметка (template) — в index.html;
+ * app.js — состояние, API, сборка экранов из данных (списки АЗС и т.п.).
  * Экраны: home → fuel → stations → pump → volume → confirm → process → result.
- * История и pending-заказ хранятся в localStorage.
+ * История и pending — localStorage.
  */
 !(function () {
   "use strict";
@@ -37,6 +40,28 @@
         codes: ["propane"]
       }
     ],
+    // Имена топлива по бренду (getStations имён не отдаёт — зеркало справочника FakeApi).
+    BRAND_FUEL_NAMES = {
+      "Магистраль": {
+        diesel: "ДТ",
+        diesel_premium: "ДТ Евро-5 Опти",
+        ai92: "АИ-92",
+        ai95: "АИ-95"
+      },
+      "Север Ойл": { diesel: "Дизель", ai92: "Регуляр-92", ai95: "Г-95" },
+      "ТрассНефть": {
+        diesel: "ДТ-Л",
+        diesel_winter: "ДТ Арктика",
+        ai95: "95 Премиум"
+      },
+      "Волга-Топливо": {
+        diesel: "ДТ",
+        ai92: "АИ-92",
+        ai95: "АИ-95",
+        ai100: "АИ-100"
+      },
+      "Колесо": { diesel: "ДТ ЭКО", ai92: "АИ-92", propane: "Пропан" }
+    },
     api = window.FakeApi;
   if (api) {
     var state = {
@@ -72,16 +97,23 @@
         overlay: null,
         sheet: null,
         sheetData: null,
-        netScreen: null
+        netScreen: null,
+        linkOkBanner: null
       },
       root = document.getElementById("app");
     (window.addEventListener("online", function () {
-      ((state.online = true),
-        "home" === state.screen
-          ? refreshHome()
-          : "process" === state.screen && state.fueling
-            ? startPolling(state.fueling.id)
-            : render());
+      state.online = true;
+      if ("home" === state.screen) refreshHome();
+      else if ("process" === state.screen && state.fueling) {
+        setState(
+          { linkOkBanner: "Связь есть · статус обновлён" },
+          { render: false }
+        );
+        startPolling(state.fueling.id);
+        setTimeout(function () {
+          if (state.linkOkBanner) setState({ linkOkBanner: null });
+        }, 6000);
+      } else render();
     }),
       window.addEventListener("offline", function () {
         ((state.online = false), render());
@@ -90,7 +122,7 @@
         state: state,
         boot: boot,
         goHome: goHome,
-        pushHistory: pushHistory,
+        pushHistory: upsertHistory,
         recommendedLiters: recommendedLiters,
         hardMaxLiters: hardMaxLiters
       }),
@@ -101,6 +133,23 @@
   function el(tag, cls, text) {
     var n = document.createElement(tag);
     return (cls && (n.className = cls), null != text && (n.textContent = text), n);
+  }
+
+  /** Клон <template id="..."> из index.html */
+  function fromTemplate(id) {
+    var tpl = document.getElementById(id);
+    return tpl && tpl.content ? tpl.content.cloneNode(true) : null;
+  }
+
+  /** Ширина прогресса через CSS-переменную --pct (см. index.html) */
+  function setProgress(fillEl, pct) {
+    fillEl.style.setProperty("--pct", Math.max(0, Math.min(100, pct)) + "%");
+  }
+
+  function priceTierClass(tier) {
+    if ("dear" === tier) return "t-dear";
+    if ("mid" === tier) return "t-mid";
+    return "t-cheap";
   }
 
   function money(n) {
@@ -231,17 +280,186 @@
   function applyTrip(trip) {
     var prev = previousTripId();
     var changed = !!(prev && trip && trip.id && prev !== trip.id);
-    if (changed) clearTripLocalData();
+    if (changed) {
+      clearTripLocalData();
+      state.overlay = "tripChanged";
+      state.sheet = null;
+      state.sheetData = null;
+      state.netScreen = null;
+    }
     cacheTrip(trip);
     return changed;
   }
 
-  function pushHistory(entry) {
+  function upsertHistory(entry) {
     var list = state.history.slice();
-    (list.unshift(entry),
-      list.length > 30 && (list = list.slice(0, 30)),
-      (state.history = list),
-      saveJson("zapravka.history.v1", list));
+    var i = -1;
+    if (entry.fuelingId) {
+      for (var k = 0; k < list.length; k++) {
+        if (list[k].fuelingId === entry.fuelingId) {
+          i = k;
+          break;
+        }
+      }
+    }
+    if (i >= 0) list[i] = Object.assign({}, list[i], entry);
+    else list.unshift(entry);
+    if (list.length > 30) list = list.slice(0, 30);
+    state.history = list;
+    saveJson("zapravka.history.v1", list);
+  }
+
+  function whenLabelNow() {
+    var d = new Date();
+    var months = [
+      "января",
+      "февраля",
+      "марта",
+      "апреля",
+      "мая",
+      "июня",
+      "июля",
+      "августа",
+      "сентября",
+      "октября",
+      "ноября",
+      "декабря"
+    ];
+    return (
+      d.getDate() +
+      " " +
+      months[d.getMonth()] +
+      ", " +
+      String(d.getHours()).padStart(2, "0") +
+      ":" +
+      String(d.getMinutes()).padStart(2, "0")
+    );
+  }
+
+  function stationAddressForFueling(f) {
+    return (
+      (state.stationDetail && state.stationDetail.address) ||
+      f.stationAddress ||
+      ""
+    );
+  }
+
+  function historyPumpLabel(f) {
+    var brand =
+      (state.stationDetail && state.stationDetail.brand) ||
+      (f && f.stationBrand) ||
+      "";
+    return pumpLabel(brand, f && f.pump);
+  }
+
+  function historySnapshot(f, extra) {
+    return Object.assign(
+      {
+        stationName: f.stationName,
+        stationAddress: stationAddressForFueling(f),
+        price: f.price,
+        amountHeld: f.amountHeld,
+        fuelingId: f.id,
+        fuelName: f.fuelName || "",
+        fuelCode: f.fuel || "",
+        pump: f.pump != null ? f.pump : null,
+        pumpLabel: historyPumpLabel(f)
+      },
+      extra || {}
+    );
+  }
+
+  /** Запись в историю сразу при холде; позже обновляется по fuelingId. */
+  function rememberFuelingStart(f) {
+    if (!f || !f.id) return;
+    upsertHistory(
+      historySnapshot(f, {
+        active: true,
+        ok: false,
+        holdReturned: false,
+        underfill: false,
+        liters: f.liters,
+        orderedLiters: f.liters,
+        factLiters: null,
+        factAmount: null,
+        reason: "",
+        whenLabel: whenLabelNow()
+      })
+    );
+  }
+
+  function ensureHistoryForActive(f) {
+    if (!f || !f.id) return;
+    var found = state.history.some(function (h) {
+      return h.fuelingId === f.id;
+    });
+    if (!found) rememberFuelingStart(f);
+  }
+
+  function isUnderfillHistory(h) {
+    if (!h || !h.ok || h.active) return false;
+    if (h.underfill) return true;
+    var ordered =
+      h.orderedLiters != null ? Number(h.orderedLiters) : Number(h.liters);
+    var fact = h.factLiters != null ? Number(h.factLiters) : NaN;
+    if (!isNaN(ordered) && !isNaN(fact) && fact < ordered - 0.001) return true;
+    var held = Number(h.amountHeld) || 0;
+    var charged = Number(h.factAmount) || 0;
+    return held - charged > 0.01;
+  }
+
+  function holdRefundAmount(h) {
+    var held = Number(h.amountHeld) || 0;
+    var charged = Number(h.factAmount) || 0;
+    return Math.round((held - charged) * 100) / 100;
+  }
+
+  /** Закрыть запись истории по финальному getFueling (без смены экрана). */
+  function applyFuelingToHistory(f) {
+    if (!f || !f.id) return;
+    if ("completed" !== f.status && "cancelled" !== f.status) return;
+    var ok = "completed" === f.status;
+    var ordered = Number(f.liters);
+    var factL = ok ? Number(f.factLiters) : null;
+    var underfill =
+      ok && factL != null && !isNaN(factL) && factL < ordered - 0.001;
+    upsertHistory(
+      historySnapshot(f, {
+        active: false,
+        ok: ok,
+        holdReturned: !ok,
+        underfill: underfill,
+        liters: ok ? f.factLiters : f.liters,
+        orderedLiters: f.liters,
+        factLiters: f.factLiters,
+        factAmount: ok ? f.factAmount : f.amountHeld,
+        reason: ok ? "" : reasonLabel(f.reason),
+        whenLabel: whenLabelNow()
+      })
+    );
+  }
+
+  /**
+   * Догон: в истории active:true, а в FakeApi заказ уже completed/cancelled
+   * (холд снят, polling/finishFueling не успели обновить запись).
+   */
+  function reconcileOpenHistory() {
+    var open = state.history.filter(function (h) {
+      return h.active && h.fuelingId;
+    });
+    if (!open.length) return Promise.resolve();
+    return Promise.all(
+      open.map(function (h) {
+        return callApi("getFueling", [h.fuelingId])
+          .then(function (f) {
+            applyFuelingToHistory(f);
+            return f;
+          })
+          .catch(function () {
+            return null;
+          });
+      })
+    );
   }
 
   function savePending(p) {
@@ -343,15 +561,20 @@
         .then(function (res) {
           var tripInfo = res[0];
           var active = tripInfo.tripChanged ? null : res[1];
-          setState({
-            loading: false,
-            screen: "home",
-            trip: tripInfo.trip,
-            tripFromCache: !!tripInfo.fromCache,
-            online: !tripInfo.fromCache,
-            error: tripInfo.err || null,
-            activeFueling: active,
-            overlay: active ? "active" : null
+          if (active) ensureHistoryForActive(active);
+          return reconcileOpenHistory().then(function () {
+            setState({
+              loading: false,
+              screen: "home",
+              trip: tripInfo.trip,
+              tripFromCache: !!tripInfo.fromCache,
+              online: !tripInfo.fromCache,
+              error: tripInfo.err || null,
+              activeFueling: active,
+              fueling: active || state.fueling,
+              overlay: tripInfo.tripChanged ? "tripChanged" : null
+            });
+            if (active && !tripInfo.tripChanged) startPolling(active.id);
           });
         })
         .catch(function (err) {
@@ -366,69 +589,99 @@
   }
 
   function refreshHome() {
-    (setState({
+    if (state.loading) return;
+    setState({
       loading: true,
       error: null
-    }),
-      callApi("getTrip")
-        .then(function (trip) {
-          var changed = applyTrip(trip);
-          return callApi("getActiveFueling").then(function (active) {
-            if (changed) active = null;
+    });
+    callApi("getTrip")
+      .then(function (trip) {
+        var changed = applyTrip(trip);
+        return callApi("getActiveFueling").then(function (active) {
+          if (changed) active = null;
+          if (active) ensureHistoryForActive(active);
+          return reconcileOpenHistory().then(function () {
             setState({
               loading: false,
               trip: trip,
               tripFromCache: false,
               online: true,
               activeFueling: active,
-              overlay: active ? "active" : null,
+              fueling: active || null,
+              screen: "home",
+              overlay: changed ? "tripChanged" : null,
               error: null
             });
+            if (active && !changed) startPolling(active.id);
+            else if (!active) stopPoll();
           });
-        })
-        .catch(function (err) {
-          setState({
-            loading: false,
-            error: err,
-            online: false
-          });
-        }));
+        });
+      })
+      .catch(function (err) {
+        setState({
+          loading: false,
+          error: err,
+          online: false
+        });
+      });
   }
 
   function goHome() {
     (stopPoll(),
-      setState({
-        screen: "home",
-        overlay: null,
-        sheet: null,
-        netScreen: null,
-        sending: false,
-        fueling: null,
-        stationDetail: null
-      }),
+      setState(
+        {
+          screen: "home",
+          overlay: null,
+          sheet: null,
+          netScreen: null,
+          sending: false,
+          loading: false,
+          fueling: null,
+          stationDetail: null
+        },
+        { render: false }
+      ),
       refreshHome());
   }
 
   function onStartFueling() {
-    if (!state.online || state.tripFromCache) return;
+    if (!state.online || state.tripFromCache || state.loading) return;
     if (state.activeFueling) {
-      setState({ overlay: "active" });
+      openActiveFueling();
       return;
     }
     // Перед заказом подтягиваем свежий лимит рейса (как «Обновить»).
     setState({ loading: true, error: null });
     callApi("getTrip")
       .then(function (trip) {
-        applyTrip(trip);
-        resetOrder(false);
-        setState({
-          loading: false,
-          trip: trip,
-          tripFromCache: false,
-          online: true,
-          screen: "fuel",
-          fuelGroupId: "diesel",
-          overlay: null
+        var changed = applyTrip(trip);
+        if (changed) {
+          setState({
+            loading: false,
+            trip: trip,
+            tripFromCache: false,
+            online: true,
+            screen: "home",
+            overlay: "tripChanged"
+          });
+          return;
+        }
+        return callApi("getActiveFueling").then(function (active) {
+          if (active) {
+            setState({ trip: trip, tripFromCache: false }, { render: false });
+            showFueling(active, "Уже есть заказ · второй холд не создан");
+            return;
+          }
+          resetOrder(false);
+          setState({
+            loading: false,
+            trip: trip,
+            tripFromCache: false,
+            online: true,
+            screen: "fuel",
+            fuelGroupId: "diesel",
+            overlay: null
+          });
         });
       })
       .catch(function (err) {
@@ -442,19 +695,13 @@
   }
 
   function openActiveFueling() {
-    var f = state.activeFueling;
-    f &&
-      (setState({
-        overlay: null,
-        fueling: f,
-        screen: "process",
-        lastFueling: null
-      }),
-      startPolling(f.id));
+    if (state.activeFueling) showFueling(state.activeFueling);
   }
 
   /* ========== stations: load, enrich, select ========== */
-  function loadStations() {
+  function loadStations(opts) {
+    var force = opts && opts.force;
+    if (!force && state.loading && "stations" === state.screen) return;
     setState({
       loading: true,
       error: null,
@@ -493,6 +740,106 @@
       { render: false }
     );
     loadStations();
+  }
+
+  // Свежий getStation: занятость колонок как в API. keepPump — сохранить выбор, если ещё free.
+  function refreshStationDetail(opts) {
+    opts = opts || {};
+    var stationId = state.selectedStationId,
+      fuelCode = state.fuelCode,
+      keepPump = !!opts.keepPump,
+      prevPump = state.selectedPump;
+    if (!stationId || !fuelCode) return Promise.resolve(null);
+    return callApi("getStation", [stationId])
+      .then(function (detail) {
+        var fuel = null;
+        detail.fuels.forEach(function (f) {
+          if (f.code === fuelCode) fuel = f;
+        });
+        var selectedPump = keepPump ? prevPump : null;
+        if (selectedPump != null) {
+          var pump = null;
+          detail.pumps.forEach(function (p) {
+            if (p.number === selectedPump) pump = p;
+          });
+          var ok =
+            pump && "free" === pump.status && pump.fuels.indexOf(fuelCode) >= 0;
+          if (!ok) selectedPump = null;
+        }
+        setState({
+          stationDetail: detail,
+          fuelName: fuel ? fuel.name : fuelCode,
+          price: fuel ? fuel.price : state.price,
+          litersMin: detail.litersMin,
+          litersMax: detail.litersMax,
+          selectedPump: selectedPump,
+          online: true
+        });
+        return detail;
+      })
+      .catch(function () {
+        setState({ online: false });
+        return null;
+      });
+  }
+
+  /** Обновить цену АЗС и доступный лимит на экранах объёма / подтверждения. */
+  function refreshOrderPriceAndLimit() {
+    if (state.loading || state.sending) return;
+    var stayOn = state.screen;
+    var stationId = state.selectedStationId;
+    var fuelCode = state.fuelCode;
+    if (!stationId || !fuelCode) return;
+    setState({ loading: true, error: null });
+    Promise.all([callApi("getTrip"), callApi("getStation", [stationId])])
+      .then(function (res) {
+        var trip = res[0];
+        var detail = res[1];
+        var changed = applyTrip(trip);
+        if (changed) {
+          setState({
+            loading: false,
+            trip: trip,
+            tripFromCache: false,
+            online: true,
+            screen: "home",
+            overlay: "tripChanged"
+          });
+          return;
+        }
+        var fuel = null;
+        detail.fuels.forEach(function (f) {
+          if (f.code === fuelCode) fuel = f;
+        });
+        var newPrice = fuel ? fuel.price : state.price;
+        var newMin = detail.litersMin;
+        var newMax = detail.litersMax;
+        var left = Number(trip.limitLeft) || 0;
+        var byMoney = Math.floor(left / (Number(newPrice) || 1));
+        var hard = Math.max(newMin, Math.min(newMax, byMoney));
+        var vol = Math.max(newMin, Math.min(hard, Number(state.volume) || newMin));
+        setState({
+          loading: false,
+          trip: trip,
+          tripFromCache: false,
+          online: true,
+          stationDetail: detail,
+          fuelName: fuel ? fuel.name : fuelCode,
+          price: newPrice,
+          litersMin: newMin,
+          litersMax: newMax,
+          volume: vol,
+          screen: stayOn === "confirm" || stayOn === "volume" ? stayOn : state.screen,
+          error: null
+        });
+      })
+      .catch(function (err) {
+        setState({
+          loading: false,
+          error: err,
+          online: false
+        });
+      });
   }
 
   function enrichedStations() {
@@ -573,6 +920,7 @@
   // Для mid/dear — мягкое предупреждение, если в радиусе есть заметно выгоднее
   // (и это не та же АЗС: в радиусе могут быть только дорогие).
   function selectStation(item, force) {
+    if (state.loading) return;
     if (!force && ("dear" === item.tier || "mid" === item.tier)) {
       var data = enrichedStations();
       var better = null;
@@ -596,49 +944,67 @@
   }
 
   function openStation(stationId, fuelCode, price) {
-    (setState({
+    if (state.loading) return;
+    setState({
       loading: true,
       selectedStationId: stationId,
       fuelCode: fuelCode,
       price: price,
       selectedPump: null
-    }),
-      callApi("getStation", [stationId])
-        .then(function (detail) {
-          var fuel = null;
-          (detail.fuels.forEach(function (f) {
-            f.code === fuelCode && (fuel = f);
-          }),
-            setState({
-              loading: false,
-              stationDetail: detail,
-              fuelName: fuel ? fuel.name : fuelCode,
-              price: fuel ? fuel.price : price,
-              litersMin: detail.litersMin,
-              litersMax: detail.litersMax,
-              screen: "pump",
-              sheet: null
-            }));
-        })
-        .catch(function (err) {
-          setState({
-            loading: false,
-            error: err,
-            netScreen: "stations",
-            screen: "net"
-          });
-        }));
+    });
+    callApi("getStation", [stationId])
+      .then(function (detail) {
+        var fuel = null;
+        detail.fuels.forEach(function (f) {
+          if (f.code === fuelCode) fuel = f;
+        });
+        setState({
+          loading: false,
+          stationDetail: detail,
+          fuelName: fuel ? fuel.name : fuelCode,
+          price: fuel ? fuel.price : price,
+          litersMin: detail.litersMin,
+          litersMax: detail.litersMax,
+          screen: "pump",
+          sheet: null
+        });
+      })
+      .catch(function (err) {
+        setState({
+          loading: false,
+          error: err,
+          netScreen: "stations",
+          screen: "net"
+        });
+      });
   }
 
-  /* ========== volume / soft budget (50% of trip total 20000) ========== */
+  /* ========== volume / soft budget (50% of getTrip().limitTotal) ========== */
+  function tripLimitTotal() {
+    var n = Number(state.trip && state.trip.limitTotal);
+    return n > 0 ? n : 0;
+  }
+
   function hardMaxLiters() {
     var price = Number(state.price) || 1,
       byMoney = Math.floor((Number(state.trip && state.trip.limitLeft) || 0) / price);
     return Math.max(state.litersMin, Math.min(state.litersMax, byMoney));
   }
 
+  function fuelDisplayName(brand, code) {
+    var m = BRAND_FUEL_NAMES[brand];
+    return (m && m[code]) || code || "";
+  }
+
+  // Мягкий бюджет: min(50% остатка, 30% limitTotal).
   function budgetRub() {
-    return Math.round(0.5 * 2e4);
+    var left = Number(state.trip && state.trip.limitLeft) || 0,
+      total = tripLimitTotal(),
+      a = Math.round(0.5 * left),
+      b = Math.round(0.3 * total);
+    if (total > 0 && left > 0) return Math.min(a, b);
+    if (total > 0) return b;
+    return a;
   }
 
   function recommendedLiters() {
@@ -686,142 +1052,231 @@
   }
 
   /* ========== start / poll / finish / cancel ========== */
-  function submitFueling() {
-    if (!state.sending) {
-      var payload = buildStartPayload();
-      (savePending({
-        clientRequestId: payload.clientRequestId,
-        payload: payload,
-        at: Date.now()
-      }),
+  function showFueling(f, banner) {
+    if (!f) return;
+    ensureHistoryForActive(f);
+    setState({
+      sending: false,
+      loading: false,
+      fueling: f,
+      activeFueling: f,
+      screen: "process",
+      netScreen: null,
+      overlay: null,
+      lastFueling: null,
+      online: true,
+      linkOkBanner: banner || null
+    });
+    startPolling(f.id);
+    if (banner) {
+      setTimeout(function () {
+        if (state.linkOkBanner === banner) setState({ linkOkBanner: null });
+      }, 6000);
+    }
+  }
+
+  function openFuelingById(id) {
+    if (!id || state.loading || state.sending) return;
+    setState({ loading: true, error: null });
+    callApi("getFueling", [id])
+      .then(function (f) {
+        applyFuelingToHistory(f);
+        if ("completed" === f.status || "cancelled" === f.status) {
+          setState({ loading: false, online: true }, { render: false });
+          refreshHome();
+          return;
+        }
+        showFueling(f);
+      })
+      .catch(function (err) {
         setState({
-          sending: true,
-          screen: "confirm"
-        }),
-        callApi("startFueling", [payload])
-          .then(function (f) {
-            (savePending(null),
+          loading: false,
+          error: err,
+          online: "NETWORK_ERROR" === err.code ? false : state.online
+        });
+      });
+  }
+
+  function submitFueling() {
+    if (state.sending) return;
+    var payload = buildStartPayload();
+    var started = false;
+    savePending({
+      clientRequestId: payload.clientRequestId,
+      payload: payload,
+      at: Date.now()
+    });
+    setState({
+      sending: true,
+      screen: "confirm"
+    });
+    callApi("getActiveFueling")
+      .then(function (existing) {
+        if (existing) {
+          savePending(null);
+          showFueling(existing, "Уже есть заказ · второй холд не создан");
+          return;
+        }
+        started = true;
+        return callApi("startFueling", [payload]).then(function (f) {
+          savePending(null);
+          rememberFuelingStart(f);
+          setState({
+            sending: false,
+            fueling: f,
+            activeFueling: f,
+            screen: "process",
+            online: true
+          });
+          startPolling(f.id);
+        });
+      })
+      .catch(function (err) {
+        if ("NETWORK_ERROR" === err.code && !started) {
+          setState({
+            sending: false,
+            screen: "confirm",
+            online: false,
+            sheet: "error",
+            sheetData: err
+          });
+          return;
+        }
+        if ("NETWORK_ERROR" !== err.code) {
+          if ("PRICE_CHANGED" === err.code)
+            return (
               setState({
                 sending: false,
-                fueling: f,
-                activeFueling: f,
-                screen: "process",
-                online: true
-              }),
-              startPolling(f.id));
-          })
-          .catch(function (err) {
-            if ("NETWORK_ERROR" !== err.code) {
-              if ("PRICE_CHANGED" === err.code)
-                return (
-                  setState({
-                    sending: false,
-                    sheet: "priceChanged",
-                    sheetData: err.details,
-                    clientRequestId: null
-                  }),
-                  void savePending(null)
-                );
-              if ("PUMP_BUSY" === err.code)
-                return (
-                  setState({
-                    sending: false,
-                    sheet: "pumpBusy",
-                    clientRequestId: null
-                  }),
-                  void savePending(null)
-                );
-              if ("LIMIT_EXCEEDED" === err.code)
-                return (
-                  setState({
-                    sending: false,
-                    sheet: "limit",
-                    sheetData: err.details,
-                    clientRequestId: null
-                  }),
-                  void savePending(null)
-                );
-              (setState({
-                sending: false,
-                sheet: "error",
-                sheetData: err,
+                sheet: "priceChanged",
+                sheetData: err.details,
                 clientRequestId: null
               }),
-                savePending(null));
-            } else
+              void savePending(null)
+            );
+          if ("PUMP_BUSY" === err.code)
+            return (
               setState({
                 sending: false,
-                netScreen: "afterStart",
-                screen: "net"
-              });
-          }));
-    }
+                sheet: "pumpBusy",
+                clientRequestId: null,
+                selectedPump: null
+              }),
+              void savePending(null)
+            );
+          if ("LIMIT_EXCEEDED" === err.code)
+            return (
+              setState({
+                sending: false,
+                sheet: "limit",
+                sheetData: err.details,
+                clientRequestId: null
+              }),
+              void savePending(null)
+            );
+          setState({
+            sending: false,
+            sheet: "error",
+            sheetData: err,
+            clientRequestId: null
+          });
+          savePending(null);
+        } else
+          setState({
+            sending: false,
+            netScreen: "afterStart",
+            screen: "net"
+          });
+      });
   }
 
   function retrySameOrder() {
     var p = state.pending && state.pending.payload;
-    (p || (p = buildStartPayload()),
-      setState({
-        sending: true,
-        screen: "confirm",
-        netScreen: null
-      }),
-      callApi("startFueling", [p])
-        .then(function (f) {
-          (savePending(null),
-            setState({
+    if (!p) p = buildStartPayload();
+    setState({
+      sending: true,
+      screen: "confirm",
+      netScreen: null
+    });
+    callApi("getActiveFueling")
+      .then(function (existing) {
+        if (existing) {
+          savePending(null);
+          showFueling(existing, "Уже есть заказ · второй холд не создан");
+          return;
+        }
+        return callApi("startFueling", [p]).then(function (f) {
+          savePending(null);
+          rememberFuelingStart(f);
+          setState({
+            sending: false,
+            fueling: f,
+            activeFueling: f,
+            screen: "process"
+          });
+          startPolling(f.id);
+        });
+      })
+      .catch(function (err) {
+        "NETWORK_ERROR" !== err.code
+          ? setState({
               sending: false,
-              fueling: f,
-              activeFueling: f,
-              screen: "process"
-            }),
-            startPolling(f.id));
-        })
-        .catch(function (err) {
-          "NETWORK_ERROR" !== err.code
-            ? setState({
-                sending: false,
-                sheet: "error",
-                sheetData: err,
-                screen: "confirm"
-              })
-            : setState({
-                sending: false,
-                netScreen: "afterStart",
-                screen: "net"
-              });
-        }));
+              sheet: "error",
+              sheetData: err,
+              screen: "confirm"
+            })
+          : setState({
+              sending: false,
+              netScreen: "afterStart",
+              screen: "net"
+            });
+      });
   }
 
   function checkActiveAfterNet() {
-    (setState({
-      loading: true
-    }),
-      callApi("getActiveFueling")
-        .then(function (f) {
-          f
-            ? (savePending(null),
-              setState({
-                loading: false,
-                fueling: f,
-                activeFueling: f,
-                screen: "process",
-                netScreen: null
-              }),
-              startPolling(f.id))
-            : setState({
-                loading: false,
-                netScreen: "beforeStart",
-                screen: "net"
-              });
-        })
-        .catch(function () {
+    setState({ loading: true });
+    callApi("getActiveFueling")
+      .then(function (f) {
+        if (f) {
+          savePending(null);
+          rememberFuelingStart(f);
           setState({
             loading: false,
-            netScreen: "status",
+            fueling: f,
+            activeFueling: f,
+            screen: "process",
+            netScreen: null,
+            online: true,
+            linkOkBanner: "Связь есть · статус обновлён"
+          });
+          startPolling(f.id);
+          setTimeout(function () {
+            if (state.linkOkBanner) setState({ linkOkBanner: null });
+          }, 6000);
+        } else {
+          setState({
+            loading: false,
+            netScreen: "beforeStart",
             screen: "net"
           });
-        }));
+        }
+      })
+      .catch(function () {
+        // Не уводим на отдельный «догоняем статус»: остаёмся на процессе, если заказ есть.
+        if (state.fueling) {
+          setState({
+            loading: false,
+            screen: "process",
+            netScreen: null,
+            online: false
+          });
+        } else {
+          setState({
+            loading: false,
+            netScreen: "afterStart",
+            screen: "net"
+          });
+        }
+      });
   }
 
   function startPolling(id) {
@@ -860,47 +1315,24 @@
     }, 1000);
   }
 
-  // Итог заправки: одна запись в историю на id (cancel + poll иначе дублируют).
+  // Итог заправки: обновляет запись, созданную при холде (по fuelingId).
   function finishFueling(f) {
     stopPoll();
     var alreadyDone =
       state.lastFueling &&
       state.lastFueling.id === f.id &&
       ("completed" === state.lastFueling.status || "cancelled" === state.lastFueling.status);
-    if (!alreadyDone) {
-      var d = new Date();
-      var months = [
-        "янв",
-        "фев",
-        "мар",
-        "апр",
-        "май",
-        "июн",
-        "июл",
-        "авг",
-        "сен",
-        "окт",
-        "ноя",
-        "дек"
-      ];
-      var ok = "completed" === f.status;
-      pushHistory({
-        ok: ok,
-        holdReturned: !ok,
-        stationName: f.stationName,
-        factLiters: f.factLiters,
-        factAmount: f.factAmount,
-        reason: reasonLabel(f.reason),
-        whenLabel:
-          d.getDate() +
-          " " +
-          months[d.getMonth()] +
-          ", " +
-          String(d.getHours()).padStart(2, "0") +
-          ":" +
-          String(d.getMinutes()).padStart(2, "0"),
-        fuelingId: f.id
+    // Всегда синхронизируем историю: иначе active:true может зависнуть.
+    applyFuelingToHistory(f);
+    if (alreadyDone) {
+      savePending(null);
+      setState({
+        lastFueling: f,
+        fueling: f,
+        activeFueling: null,
+        sending: false
       });
+      return;
     }
     savePending(null);
     setState({
@@ -912,10 +1344,12 @@
     });
     callApi("getTrip")
       .then(function (trip) {
-        applyTrip(trip);
+        var changed = applyTrip(trip);
         setState({
           trip: trip,
-          tripFromCache: false
+          tripFromCache: false,
+          screen: changed ? "home" : "result",
+          overlay: changed ? "tripChanged" : state.overlay
         });
       })
       .catch(function () {});
@@ -977,38 +1411,7 @@
             "home" === state.screen
               ? viewHome()
               : "history" === state.screen
-                ? (function () {
-                    var s = el("div", "screen"),
-                      body = el("div", "screen-body");
-                    body.appendChild(
-                      topBack("История заправок", function () {
-                        setState({
-                          screen: "home"
-                        });
-                      })
-                    );
-                    var hist = el("div", "hist");
-                    state.history.length
-                      ? state.history.forEach(function (h) {
-                          var item = histRow(h);
-                          (item.appendChild(
-                            rowMuted(
-                              h.ok ? "Списано" : "Холд",
-                              h.ok ? money(h.factAmount) : "возвращён"
-                            )
-                          ),
-                            hist.appendChild(item));
-                        })
-                      : hist.appendChild(el("div", "hist-item muted", "История пуста"));
-                    return (
-                      body.appendChild(hist),
-                      body.appendChild(
-                        el("div", "muted sm", "*История на устройстве")
-                      ),
-                      s.appendChild(body),
-                      s
-                    );
-                  })()
+                ? viewHistory()
                 : "fuel" === state.screen
                   ? (function () {
                       var s = el("div", "screen"),
@@ -1036,16 +1439,21 @@
                       body.appendChild(
                         el(
                           "div",
-                          "hint neutral",
+                          "hint",
                           "Один тип топлива на заказ. Точное название на АЗС может отличаться (например, «ДТ ЭКО», «Дизель»)."
                         )
                       );
                       s.appendChild(body);
                       var bottom = el("div", "bottom"),
-                        next = el("button", "btn", "К выбору АЗС");
+                        next = el(
+                          "button",
+                          "btn" + (state.loading ? " busy" : ""),
+                          state.loading ? "Ищем АЗС…" : "К выбору АЗС"
+                        );
                       return (
                         (next.type = "button"),
-                        (next.onclick = loadStations),
+                        (next.disabled = !!state.loading),
+                        state.loading || (next.onclick = loadStations),
                         bottom.appendChild(next),
                         s.appendChild(bottom),
                         s
@@ -1055,17 +1463,18 @@
                     ? (function () {
                         var s = el("div", "screen");
                         state.online || s.appendChild(el("div", "banner bad", "Нет связи"));
-                        var body = el("div", "screen-body");
-                        ((body.style.display = "flex"),
-                          (body.style.flexDirection = "column"),
-                          (body.style.minHeight = "0"),
-                          body.appendChild(
-                            topBack("Выбор АЗС", function () {
+                        var body = el("div", "screen-body stack");
+                        (body.appendChild(
+                          topBack(
+                            "Выбор АЗС",
+                            function () {
                               setState({
                                 screen: "fuel"
                               });
-                            })
-                          ),
+                            },
+                            refreshIconBtn(refreshStationsAction)
+                          )
+                        ),
                           body.appendChild(stepsBar(1)));
                         var scroll = el("div", "scroll-body"),
                           group = fuelGroupById(state.fuelGroupId),
@@ -1136,14 +1545,7 @@
                                 (data.nearest && item.st.id === data.nearest.st.id) ||
                                   scroll.appendChild(
                                     (function (item) {
-                                      var cls =
-                                          "station " +
-                                          ("deal" === item.tier || "cheap" === item.tier
-                                            ? "cheap"
-                                            : "mid" === item.tier
-                                              ? "mid"
-                                              : "dear"),
-                                        btn = el("button", cls);
+                                      var btn = el("button", "station " + stripeClass(item.tier));
                                       btn.type = "button";
                                       var top = el("div", "row");
                                       (top.appendChild(el("span", "name", item.st.name)),
@@ -1153,20 +1555,17 @@
                                       meta.appendChild(
                                         el("span", "dist", formatDist(item.dist))
                                       );
-                                      var pr = el("span", "price", perLiter(item.price));
-                                      "dear" === item.tier && (pr.style.color = "var(--dear)");
-                                      ("deal" !== item.tier && "cheap" !== item.tier) ||
-                                        (pr.style.color = "var(--cheap)");
-                                      "mid" === item.tier && (pr.style.color = "var(--mid)");
+                                      meta.appendChild(stationPriceCol(item));
                                       return (
-                                        meta.appendChild(pr),
                                         btn.appendChild(meta),
                                         btn.appendChild(
                                           el("div", "muted", item.st.address || "")
                                         ),
-                                        (btn.onclick = function () {
-                                          selectStation(item, false);
-                                        }),
+                                        (btn.disabled = !!state.loading),
+                                        state.loading ||
+                                          (btn.onclick = function () {
+                                            selectStation(item, false);
+                                          }),
                                         btn
                                       );
                                     })(item)
@@ -1181,7 +1580,9 @@
                                     " км нет АЗС с этим топливом. Увеличьте радиус."
                                 )
                               ));
-                        return (body.appendChild(scroll), s.appendChild(body), s);
+                        body.appendChild(scroll);
+                        s.appendChild(body);
+                        return s;
                       })()
                     : "pump" === state.screen
                       ? (function () {
@@ -1248,7 +1649,7 @@
                                 el(
                                   "div",
                                   "hint neutral",
-                                  "У «Колесо» на стойках буквы: А = 1, Б = 2, В = 3…"
+                                  "У «Колесо» на стойках буквы: А = 1, Б = 2, …"
                                 )
                               ));
                           s.appendChild(body);
@@ -1268,11 +1669,16 @@
                             var s = el("div", "screen"),
                               body = el("div", "screen-body");
                             (body.appendChild(
-                              topBack("Сколько лить", function () {
-                                setState({
-                                  screen: "pump"
-                                });
-                              })
+                              topBack(
+                                "Сколько лить",
+                                function () {
+                                  setState({ screen: "pump" }, { render: false });
+                                  refreshStationDetail({ keepPump: true }).then(function () {
+                                    if ("pump" === state.screen) render();
+                                  });
+                                },
+                                refreshIconBtn(refreshOrderPriceAndLimit)
+                              )
                             ),
                               body.appendChild(stepsBar(3)));
                             var d = state.stationDetail,
@@ -1282,31 +1688,60 @@
                                 "div",
                                 "muted",
                                 (d ? d.name : "") +
-                                  " · " +
-                                  pumpLabel(d && d.brand, state.selectedPump) +
-                                  " · " +
-                                  (state.fuelName || "")
+                                  " · Колонка " +
+                                  pumpLabel(d && d.brand, state.selectedPump)
                               )
                             ),
-                              card.appendChild(rowMuted("Цена", perLiter(state.price))),
+                              card.appendChild(
+                                rowMuted(
+                                  "Цена на " + (state.fuelName || state.fuelCode || ""),
+                                  perLiter(state.price)
+                                )
+                              ),
                               card.appendChild(
                                 rowMuted(
                                   "Лимит АЗС на одну заправку",
-                                  "до " + state.litersMax + " л"
+                                  "от " +
+                                    state.litersMin +
+                                    " до " +
+                                    state.litersMax +
+                                    " л"
                                 )
                               ),
                               card.appendChild(
                                 rowMuted("Доступно", money(state.trip && state.trip.limitLeft))
                               ),
                               body.appendChild(card));
+                            var priceN = Number(state.price) || 1,
+                              leftRub = Number(state.trip && state.trip.limitLeft) || 0,
+                              canAffordMin =
+                                leftRub + 0.01 >= state.litersMin * priceN;
+                            var bottom = el("div", "bottom");
+                            if (!canAffordMin) {
+                              body.appendChild(
+                                el(
+                                  "div",
+                                  "hint",
+                                  "Не хватает средств на минимальную заправку (" +
+                                    state.litersMin +
+                                    " л). Обратитесь к диспетчеру для увеличения лимита."
+                                )
+                              );
+                              s.appendChild(body);
+                              var homeBtn = el("button", "btn", "На главную");
+                              homeBtn.type = "button";
+                              homeBtn.onclick = goHome;
+                              bottom.appendChild(homeBtn);
+                              s.appendChild(bottom);
+                              return s;
+                            }
                             var vol = clampVolume(state.volume),
                               maxH = hardMaxLiters(),
                               rec = recommendedLiters(),
                               sum = Math.round(vol * state.price * 100) / 100,
+                              budgetL = Math.floor(budgetRub() / priceN),
                               atCardLimit = vol >= state.litersMax && state.litersMax <= maxH,
                               atMoneyLimit = vol >= maxH && maxH < state.litersMax,
-                              canPlus10 = vol + 10 <= maxH,
-                              canPlus50 = vol + 50 <= maxH,
                               amountRow = el("div", "amount-row"),
                               m10 = el("button", "btn secondary", "−10");
                             ((m10.type = "button"),
@@ -1342,7 +1777,7 @@
                               amountRow.appendChild(box));
                             var p10 = el("button", "btn secondary", "+10");
                             ((p10.type = "button"),
-                              (p10.disabled = !canPlus10),
+                              (p10.disabled = vol >= maxH),
                               (p10.onclick = function () {
                                 setState({
                                   volume: clampVolume(vol + 10)
@@ -1361,7 +1796,7 @@
                               }));
                             var p50 = el("button", "btn secondary", "+50");
                             ((p50.type = "button"),
-                              (p50.disabled = !canPlus50),
+                              (p50.disabled = vol >= maxH),
                               (p50.onclick = function () {
                                 setState({
                                   volume: clampVolume(vol + 50)
@@ -1391,28 +1826,40 @@
                               }));
                             (recRow.appendChild(recBtn),
                               recRow.appendChild(help),
-                              body.appendChild(recRow),
-                              atCardLimit
-                                ? body.appendChild(
-                                    el(
-                                      "div",
-                                      "hint",
-                                      "Лимит на одну заправку — " +
-                                        state.litersMax +
-                                        " литров. Нужно больше? Оформите ещё один заказ."
-                                    )
-                                  )
-                                : atMoneyLimit &&
-                                  body.appendChild(
-                                    el(
-                                      "div",
-                                      "hint",
-                                      "Больше нельзя: доступно " +
-                                        money(state.trip.limitLeft) +
-                                        "."
-                                    )
-                                  ));
-                            sum > budgetRub() + 0.01 &&
+                              body.appendChild(recRow));
+                            if (vol <= state.litersMin) {
+                              body.appendChild(
+                                el(
+                                  "div",
+                                  "hint",
+                                  "Меньше " + state.litersMin + " л нельзя"
+                                )
+                              );
+                            } else if (atCardLimit) {
+                              body.appendChild(
+                                el(
+                                  "div",
+                                  "hint",
+                                  "Лимит на одну заправку — " +
+                                    state.litersMax +
+                                    " литров. Нужно больше? Оформите ещё один заказ."
+                                )
+                              );
+                            } else if (atMoneyLimit) {
+                              body.appendChild(
+                                el(
+                                  "div",
+                                  "hint",
+                                  "Больше нельзя: доступно " +
+                                    money(state.trip.limitLeft) +
+                                    "."
+                                )
+                              );
+                            }
+                            if (
+                              sum > budgetRub() + 0.01 &&
+                              !(vol <= state.litersMin && state.litersMin > budgetL)
+                            ) {
                               body.appendChild(
                                 el(
                                   "div",
@@ -1420,19 +1867,27 @@
                                   "Выгоднее оставить запас на рейс. При сбое холд может вернуться не сразу."
                                 )
                               );
+                            }
                             s.appendChild(body);
-                            var bottom = el("div", "bottom"),
-                              next = el("button", "btn", "К подтверждению · " + vol + " л");
+                            var next = el(
+                              "button",
+                              "btn" + (state.loading ? " busy" : ""),
+                              state.loading
+                                ? "Обновляем…"
+                                : "К подтверждению · " + vol + " л"
+                            );
                             return (
                               (next.type = "button"),
-                              (next.onclick = function () {
-                                setState({
-                                  volume: vol,
-                                  clientRequestId: null,
-                                  screen: "confirm",
-                                  sending: false
-                                });
-                              }),
+                              (next.disabled = !!state.loading),
+                              state.loading ||
+                                (next.onclick = function () {
+                                  setState({
+                                    volume: vol,
+                                    clientRequestId: null,
+                                    screen: "confirm",
+                                    sending: false
+                                  });
+                                }),
                               bottom.appendChild(next),
                               s.appendChild(bottom),
                               s
@@ -1445,12 +1900,16 @@
                                 s.appendChild(el("div", "banner bad", "Нет связи"));
                               var body = el("div", "screen-body");
                               (body.appendChild(
-                                topBack("Проверьте заказ", function () {
-                                  state.sending ||
-                                    setState({
-                                      screen: "volume"
-                                    });
-                                })
+                                topBack(
+                                  "Проверьте заказ",
+                                  function () {
+                                    state.sending ||
+                                      setState({
+                                        screen: "volume"
+                                      });
+                                  },
+                                  refreshIconBtn(refreshOrderPriceAndLimit)
+                                )
                               ),
                                 body.appendChild(stepsBar(4)));
                               var d = state.stationDetail,
@@ -1471,6 +1930,10 @@
                                   "В холд",
                                   money(Math.round(state.volume * state.price * 100) / 100)
                                 ),
+                                addRow(
+                                  "Доступно",
+                                  money(state.trip && state.trip.limitLeft)
+                                ),
                                 body.appendChild(card),
                                 body.appendChild(
                                   el(
@@ -1478,24 +1941,30 @@
                                     "hint",
                                     state.sending
                                       ? "Отправляем заказ… Не нажимайте снова."
-                                      : "Нажмите один раз. Кнопка сразу станет недоступной."
+                                      : "В момент заказа мы проверим актуальную цену АЗС. Об изменениях сразу сообщим"
                                   )
                                 ),
                                 s.appendChild(body));
                               var bottom = el("div", "bottom"),
+                                busyOrder = !!state.sending || !!state.loading,
                                 go = el(
                                   "button",
-                                  "btn" + (state.sending ? " sending" : ""),
+                                  "btn" +
+                                    (state.sending ? " sending" : "") +
+                                    (state.loading ? " busy" : ""),
                                   state.sending
                                     ? "Отправляем…"
-                                    : "Заправить · " +
-                                        money(
-                                          Math.round(state.volume * state.price * 100) / 100
-                                        )
+                                    : state.loading
+                                      ? "Обновляем…"
+                                      : "Заправить · " +
+                                          money(
+                                            Math.round(state.volume * state.price * 100) / 100
+                                          )
                                 );
                               ((go.type = "button"),
-                                state.sending || (go.onclick = submitFueling));
-                              if ((bottom.appendChild(go), !state.sending)) {
+                                (go.disabled = busyOrder),
+                                busyOrder || (go.onclick = submitFueling));
+                              if ((bottom.appendChild(go), !busyOrder)) {
                                 var back = el("button", "btn ghost", "Назад");
                                 ((back.type = "button"),
                                   (back.onclick = function () {
@@ -1511,16 +1980,19 @@
                             ? (function () {
                                 var f = state.fueling,
                                   s = el("div", "screen");
-                                state.online
-                                  ? false === navigator.onLine &&
-                                    s.appendChild(el("div", "banner warn", "Связь слабая"))
-                                  : s.appendChild(
-                                      el(
-                                        "div",
-                                        "banner bad",
-                                        "Нет связи · налив на АЗС продолжается, цифры догонят"
-                                      )
-                                    );
+                                if (state.linkOkBanner) {
+                                  s.appendChild(el("div", "banner ok", state.linkOkBanner));
+                                } else if (!state.online) {
+                                  s.appendChild(
+                                    el(
+                                      "div",
+                                      "banner bad",
+                                      "Нет связи · налив на АЗС продолжается, цифры догонят"
+                                    )
+                                  );
+                                } else if (false === navigator.onLine) {
+                                  s.appendChild(el("div", "banner warn", "Связь слабая"));
+                                }
                                 var body = el("div", "screen-body");
                                 if ((body.appendChild(stepsBar(4)), !f))
                                   return (
@@ -1529,42 +2001,86 @@
                                     s
                                   );
                                 var center = el("div", "center");
-                                if ("accepted" === f.status || "waiting_nozzle" === f.status) {
-                                  (center.appendChild(
-                                    (((wrap = el("div", "nozzle")).innerHTML =
-                                      '<svg viewBox="0 0 140 140" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="18" y="28" width="52" height="88" rx="10" fill="#FFF0E6" stroke="#FF6200" stroke-width="4"/><rect x="28" y="40" width="32" height="20" rx="4" fill="#FF6200"/><path d="M70 48h22c8 0 14 6 14 14v18" stroke="#111" stroke-width="6" stroke-linecap="round"/><path d="M106 80c10 0 16 8 16 18v10" stroke="#111" stroke-width="6" stroke-linecap="round"/><rect x="112" y="106" width="18" height="28" rx="5" fill="#111"/><path d="M44 78v28" stroke="#FF6200" stroke-width="5" stroke-linecap="round"/><circle cx="44" cy="70" r="5" fill="#FF6200"/></svg>'),
-                                    wrap)
-                                  ),
-                                    center.appendChild(el("div", "big", "Вставьте пистолет")));
-                                  var elapsed =
-                                      (Date.now() - (f.createdAt || Date.now())) / 1e3,
-                                    left = Math.max(0, Math.ceil(60 - elapsed));
+                                function formatClock(totalSec) {
+                                  var sec = Math.max(0, Math.floor(totalSec)),
+                                    mm = String(Math.floor(sec / 60)),
+                                    ss = String(sec % 60);
+                                  if (ss.length < 2) ss = "0" + ss;
+                                  return mm + ":" + ss;
+                                }
+                                var elapsed =
+                                  (Date.now() - (f.createdAt || Date.now())) / 1e3;
+                                if ("accepted" === f.status) {
+                                  // Долгое ожидание подтверждения АЗС (в бою — часы; в FakeApi — до STATION_NO_RESPONSE).
+                                  center.appendChild(
+                                    el("div", "big", "Ждём подтверждение АЗС")
+                                  );
                                   if (state.online) {
-                                    var mm = String(Math.floor(left / 60)),
-                                      ss = String(left % 60);
-                                    (ss.length < 2 && (ss = "0" + ss),
-                                      center.appendChild(el("div", "timer", mm + ":" + ss)),
-                                      center.appendChild(
-                                        el("div", "timer-label", "до возможной отмены заказа")
-                                      ));
-                                  } else
-                                    (center.appendChild(el("div", "timer", "—:—")),
-                                      center.appendChild(
-                                        el("div", "timer-label", "таймер обновим при сети")
-                                      ));
-                                  var card = el("div", "card");
-                                  ((card.style.width = "100%"),
-                                    card.appendChild(
-                                      rowMuted(
-                                        "Колонка",
-                                        pumpLabel(
-                                          state.stationDetail && state.stationDetail.brand,
-                                          f.pump
-                                        )
+                                    center.appendChild(el("div", "timer", formatClock(elapsed)));
+                                    center.appendChild(
+                                      el("div", "timer-label", "с момента заказа · холд занят")
+                                    );
+                                  } else {
+                                    center.appendChild(el("div", "timer", "—:—"));
+                                    center.appendChild(
+                                      el("div", "timer-label", "время обновим при сети")
+                                    );
+                                  }
+                                  center.appendChild(
+                                    el(
+                                      "div",
+                                      "hint",
+                                      "Пока АЗС не ответила, отмена доступна. Новый заказ лучше не создавать — будет второй холд."
+                                    )
+                                  );
+                                  var cardAcc = el("div", "card wide");
+                                  cardAcc.appendChild(
+                                    rowMuted(
+                                      "Колонка",
+                                      pumpLabel(
+                                        state.stationDetail && state.stationDetail.brand,
+                                        f.pump
                                       )
-                                    ),
-                                    card.appendChild(rowMuted("В холде", money(f.amountHeld))),
-                                    center.appendChild(card));
+                                    )
+                                  );
+                                  cardAcc.appendChild(rowMuted("В холде", money(f.amountHeld)));
+                                  center.appendChild(cardAcc);
+                                } else if ("waiting_nozzle" === f.status) {
+                                  var wrapNozzle = fromTemplate("tpl-nozzle");
+                                  if (wrapNozzle) center.appendChild(wrapNozzle);
+                                  center.appendChild(el("div", "big", "Вставьте пистолет"));
+                                  var leftNozzle = Math.max(0, Math.ceil(60 - elapsed));
+                                  if (state.online) {
+                                    center.appendChild(
+                                      el("div", "timer", formatClock(leftNozzle))
+                                    );
+                                    center.appendChild(
+                                      el(
+                                        "div",
+                                        "timer-label",
+                                        "до отмены, если пистолет не вставлен"
+                                      )
+                                    );
+                                  } else {
+                                    center.appendChild(el("div", "timer", "—:—"));
+                                    center.appendChild(
+                                      el("div", "timer-label", "таймер обновим при сети")
+                                    );
+                                  }
+                                  var cardWait = el("div", "card wide");
+                                  cardWait.appendChild(
+                                    rowMuted(
+                                      "Колонка",
+                                      pumpLabel(
+                                        state.stationDetail && state.stationDetail.brand,
+                                        f.pump
+                                      )
+                                    )
+                                  );
+                                  cardWait.appendChild(
+                                    rowMuted("В холде", money(f.amountHeld))
+                                  );
+                                  center.appendChild(cardWait);
                                 } else if ("fueling" === f.status) {
                                   center.appendChild(el("div", "muted", "Идёт налив"));
                                   var live = el("div", "live-wrap");
@@ -1583,11 +2099,11 @@
                                       : 0,
                                     prog = el("div", "progress lg"),
                                     fi = el("i");
-                                  ((fi.style.width = pct + "%"),
+                                  (setProgress(fi, pct),
                                     prog.appendChild(fi),
                                     center.appendChild(prog));
                                   var card2 = el("div", "card");
-                                  ((card2.style.width = "100%"),
+                                  ((card2.className = "card wide"),
                                     card2.appendChild(
                                       rowMuted(
                                         "Сейчас",
@@ -1604,25 +2120,28 @@
                                       el(
                                         "div",
                                         "hint",
-                                        "Отменить нельзя. Новый заказ не создавайте."
+                                        "Теперь отменить можно только осторожным отключением пистолета. Новый заказ не создавайте."
                                       )
                                     ));
                                 }
-                                var wrap;
                                 (body.appendChild(center), s.appendChild(body));
                                 var bottom = el("div", "bottom");
                                 if ("accepted" === f.status || "waiting_nozzle" === f.status) {
                                   var cancel = el(
                                     "button",
-                                    "btn danger",
-                                    state.online ? "Отменить заказ" : "Отменить · нет сети"
+                                    "btn danger" + (state.sending ? " busy" : ""),
+                                    state.sending
+                                      ? "Отменяем…"
+                                      : state.online
+                                        ? "Отменить заказ"
+                                        : "Отменить · нет сети"
                                   );
                                   if (
                                     ((cancel.type = "button"),
                                     (cancel.disabled = !state.online || state.sending),
-                                    (cancel.onclick = cancelFueling),
+                                    state.sending || (cancel.onclick = cancelFueling),
                                     bottom.appendChild(cancel),
-                                    !state.online)
+                                    !state.online && !state.sending)
                                   ) {
                                     var up = el("button", "btn secondary", "Обновить статус");
                                     ((up.type = "button"),
@@ -1674,7 +2193,7 @@
                                       r.appendChild(el("span", null, b)),
                                       card.appendChild(r));
                                   }
-                                  ((card.style.width = "100%"),
+                                  ((card.className = "card wide"),
                                     f &&
                                       (addRow("АЗС", f.stationName || "—"),
                                       ok
@@ -1692,7 +2211,7 @@
                                         el(
                                           "div",
                                           "muted",
-                                          "Чек утром у диспетчера — в приложении его нет"
+                                          "Чек у диспетчера — в приложении его нет"
                                         )
                                       ));
                                   (body.appendChild(center), s.appendChild(body));
@@ -1756,22 +2275,18 @@
                                         : "afterStart" === kind
                                           ? ((title = "Нет ответа сервера"),
                                             (text =
-                                              "Заказ мог уже уйти на АЗС. Не создавайте новый — будет второй холд."))
-                                          : "status" === kind
-                                            ? ((title = "Статус не обновился"),
-                                              (text =
-                                                "Проверьте позже. Новый заказ не оформляйте."))
-                                            : "cancel" === kind &&
-                                              ((title = "Отмена не отправилась"),
-                                              (text =
-                                                "Заказ на АЗС мог остаться активным. Не оформляйте новый — проверьте статус."));
+                                              "Заказ мог уже уйти на АЗС. Не создавайте новый — будет второй холд. Если колонка загудит — вставьте пистолет в течение 60 секунд от этого момента."))
+                                          : "cancel" === kind &&
+                                            ((title = "Отмена не отправилась"),
+                                            (text =
+                                              "Заказ на АЗС мог остаться активным. Не оформляйте новый — проверьте статус."));
                                     if (
                                       (center.appendChild(el("div", "big", title)),
                                       center.appendChild(el("div", "muted", text)),
                                       state.pending && state.pending.clientRequestId)
                                     ) {
                                       var card = el("div", "card");
-                                      ((card.style.width = "100%"),
+                                      ((card.className = "card wide"),
                                         card.appendChild(
                                           el("div", "muted sm", "Сохранён id запроса")
                                         ),
@@ -1791,18 +2306,12 @@
                                       ((h.type = "button"),
                                         (h.onclick = goHome),
                                         bottom.appendChild(h));
-                                    } else if (
-                                      "afterStart" === kind ||
-                                      "cancel" === kind ||
-                                      "status" === kind
-                                    ) {
+                                    } else if ("afterStart" === kind || "cancel" === kind) {
                                       var c = el("button", "btn", "Проверить статус");
-                                      if (
-                                        ((c.type = "button"),
+                                      ((c.type = "button"),
                                         (c.onclick = checkActiveAfterNet),
-                                        bottom.appendChild(c),
-                                        "afterStart" === kind || "beforeStart" === kind)
-                                      ) {
+                                        bottom.appendChild(c));
+                                      if ("afterStart" === kind) {
                                         var t = el(
                                           "button",
                                           "btn secondary",
@@ -1847,17 +2356,25 @@
             var sheet = el("div", "sheet");
             (sheet.appendChild(el("h3", null, "Что такое холд")),
               sheet.appendChild(
-                el("div", "muted", "При заказе сумма временно блокируется на лимите рейса.")
+                el(
+                  "div",
+                  "muted copy",
+                  "Холд — сумма, которая временно блокируется на лимите в момент заказа до получения подтверждения от АЗС. Пока деньги в холде, потратить их нельзя."
+                )
               ),
               sheet.appendChild(
                 el(
                   "div",
-                  "muted",
-                  "После заправки списывается только факт, остаток холда возвращается."
+                  "muted copy",
+                  "После подтверждения АЗС заправки списывается только стоимость фактически залитого топлива, остаток холда возвращается."
                 )
               ),
               sheet.appendChild(
-                el("div", "muted", "Если заправка не прошла — холд возвращается.")
+                el(
+                  "div",
+                  "muted copy",
+                  "Если заправка не прошла — холд возвращается."
+                )
               ));
             var ok = el("button", "btn", "Понятно");
             return (
@@ -1873,52 +2390,37 @@
             );
           })()
         ),
-      "active" === state.overlay &&
-        state.activeFueling &&
+      "tripChanged" === state.overlay &&
         root.appendChild(
           (function () {
-            var f = state.activeFueling,
-              wrap = el("div", "overlay"),
-              sheet = el("div", "sheet");
-            (sheet.appendChild(el("h3", null, "Есть незавершённая заправка")),
-              sheet.appendChild(
-                el("div", "muted", "Откройте её — не создавайте новый заказ.")
-              ));
-            var card = el("div", "card");
-            (card.appendChild(rowMuted("АЗС", f.stationName || "—")),
-              card.appendChild(
-                rowMuted(
-                  "Статус",
-                  ((st = f.status),
-                  {
-                    accepted: "принят",
-                    waiting_nozzle: "ожидание пистолета",
-                    fueling: "налив",
-                    completed: "завершена",
-                    cancelled: "отменена"
-                  }[st] ||
-                    st ||
-                    "—")
-                )
-              ),
-              card.appendChild(rowMuted("В холде", money(f.amountHeld))),
-              sheet.appendChild(card));
-            var st;
-            var open = el("button", "btn", "Открыть заправку");
-            ((open.type = "button"), (open.onclick = openActiveFueling));
-            var later = el("button", "btn secondary", "Позже");
-            return (
-              (later.type = "button"),
-              (later.onclick = function () {
-                setState({
-                  overlay: null
-                });
-              }),
-              sheet.appendChild(open),
-              sheet.appendChild(later),
-              wrap.appendChild(sheet),
-              wrap
+            var wrap = el("div", "overlay");
+            var sheet = el("div", "sheet");
+            sheet.appendChild(el("h3", null, "Новый рейс"));
+            sheet.appendChild(
+              el(
+                "div",
+                "muted",
+                "Данные рейса обновились. История и незавершённый заказ на устройстве сброшены — вы на главном экране."
+              )
             );
+            if (state.trip) {
+              var card = el("div", "card");
+              card.appendChild(
+                el("div", "route", state.trip.from + " → " + state.trip.to)
+              );
+              card.appendChild(
+                rowMuted("Доступно", money(state.trip.limitLeft))
+              );
+              sheet.appendChild(card);
+            }
+            var ok = el("button", "btn", "Понятно");
+            ok.type = "button";
+            ok.onclick = function () {
+              setState({ overlay: null, screen: "home" });
+            };
+            sheet.appendChild(ok);
+            wrap.appendChild(sheet);
+            return wrap;
           })()
         ),
       state.sheet &&
@@ -1938,24 +2440,39 @@
             if ("expensive" === kind) {
               sheet.appendChild(el("h3", null, "Не упустите выгодную АЗС"));
               var cmp = el("div", "card cmp");
-              var dearRow = el("div", "row");
-              dearRow.appendChild(el("span", "lbl-dear", "Выбрано"));
-              dearRow.appendChild(el("span", "price-dear", perLiter(data.item.price)));
-              cmp.appendChild(dearRow);
-              cmp.appendChild(
-                el("div", "muted sm", data.item.st.name + " · " + formatDist(data.item.dist))
-              );
-              if (data.better) {
-                var goodRow = el("div", "row");
-                goodRow.style.marginTop = "10px";
-                goodRow.appendChild(el("span", "lbl-good", "Выгоднее"));
-                goodRow.appendChild(el("span", "price-good", perLiter(data.better.price)));
-                cmp.appendChild(goodRow);
-                cmp.appendChild(
+              function cmpOffer(lblClass, lbl, priceClass, price, it) {
+                var block = el("div", "cmp-offer");
+                var left = el("div", "cmp-left");
+                left.appendChild(el("div", lblClass, lbl));
+                left.appendChild(
                   el(
                     "div",
                     "muted sm",
-                    data.better.st.name + " · " + formatDist(data.better.dist)
+                    it.st.name + " · " + formatDist(it.dist)
+                  )
+                );
+                block.appendChild(left);
+                block.appendChild(el("div", priceClass, perLiter(price)));
+                return block;
+              }
+              // Название под «Выбрано»/«Выгоднее», в левой колонке — не залезает под цену.
+              cmp.appendChild(
+                cmpOffer(
+                  "lbl-dear",
+                  "Выбрано",
+                  "price-dear",
+                  data.item.price,
+                  data.item
+                )
+              );
+              if (data.better) {
+                cmp.appendChild(
+                  cmpOffer(
+                    "lbl-good",
+                    "Выгоднее",
+                    "price-good",
+                    data.better.price,
+                    data.better
                   )
                 );
               }
@@ -2008,38 +2525,46 @@
                 sheet.appendChild(
                   el("div", "muted", "Холд не создан. Выберите другую колонку.")
                 ));
-              var pick = el("button", "btn", "Выбрать колонку");
-              ((pick.type = "button"),
-                (pick.onclick = function () {
-                  (setState({
-                    sheet: null,
-                    screen: "pump",
-                    selectedPump: null
-                  }),
-                    openStation(state.selectedStationId, state.fuelCode, state.price));
-                }),
-                sheet.appendChild(pick));
+              var pick = el("button", "btn", "К колонкам");
+              pick.type = "button";
+              pick.onclick = function () {
+                setState({ sheet: null, screen: "pump" }, { render: false });
+                refreshStationDetail({ keepPump: false }).then(function () {
+                  render();
+                });
+              };
+              sheet.appendChild(pick);
             } else if ("budgetHelp" === kind) {
+              var leftB = Number(state.trip && state.trip.limitLeft) || 0,
+                totB = tripLimitTotal();
               (sheet.appendChild(el("h3", null, "Рекомендуемый расход")),
                 sheet.appendChild(
                   el(
                     "div",
-                    "muted",
-                    "Бюджет — 50% от исходного лимита рейса (20 000 ₽ → 10 000 ₽)."
+                    "muted copy",
+                    "Два мягких лимита: 50% от остатка (" +
+                      money(Math.round(0.5 * leftB)) +
+                      ") и 30% от лимита рейса (" +
+                      money(Math.round(0.3 * totB)) +
+                      "). Рекомендуем меньший: " +
+                      money(budgetRub()) +
+                      "."
                   )
                 ),
                 sheet.appendChild(
                   el(
                     "div",
-                    "muted",
-                    "«Рекомендовано» подставляет объём по бюджету, не выше лимита АЗС и доступных денег."
+                    "muted copy",
+                    "«Рекомендовано» подставляет объём по этому бюджету, не выше лимита АЗС и доступных денег."
                   )
                 ),
                 sheet.appendChild(
                   el(
                     "div",
-                    "muted",
-                    "Выше бюджета можно. Выше доступного или лимита АЗС — нельзя."
+                    "muted copy",
+                    "Выше бюджета можно. Выше доступного или лимита АЗС — нельзя. Меньше " +
+                      state.litersMin +
+                      " л — тоже нельзя."
                   )
                 ));
               var ok = el("button", "btn", "Понятно");
@@ -2110,29 +2635,88 @@
     );
   }
 
-  function topBack(title, onBack) {
+  function refreshIconBtn(onClick) {
+    var busy = !!state.loading || !!state.sending;
+    var b = el("button", "icon-refresh");
+    b.type = "button";
+    b.setAttribute("aria-label", busy ? "Обновляем…" : "Обновить");
+    b.disabled = busy;
+    if (busy) b.appendChild(el("div", "spinner"));
+    else b.appendChild(document.createTextNode("↻"));
+    b.onclick = function () {
+      if (state.loading || state.sending) return;
+      onClick();
+    };
+    return b;
+  }
+
+  function topBack(title, onBack, rightEl) {
     var bar = el("div", "topbar"),
       b = el("button", "help", "←");
-    return (
-      (b.type = "button"),
-      (b.onclick = onBack),
-      bar.appendChild(b),
-      bar.appendChild(el("h2", null, title)),
-      bar
+    b.type = "button";
+    b.onclick = onBack;
+    bar.appendChild(b);
+    bar.appendChild(el("h2", null, title));
+    if (rightEl) bar.appendChild(rightEl);
+    return bar;
+  }
+
+  function stationPriceCol(item) {
+    var col = el("div", "price-col");
+    col.appendChild(
+      el("div", "fuel-lab", fuelDisplayName(item.st.brand, item.code))
     );
+    col.appendChild(
+      el("span", "price " + priceTierClass(item.tier), perLiter(item.price))
+    );
+    return col;
+  }
+
+  function refreshStationsAction() {
+    if (state.loading) return;
+    setState({ loading: true, error: null });
+    callApi("getTrip")
+      .then(function (trip) {
+        var ch = applyTrip(trip);
+        if (ch) {
+          setState({
+            loading: false,
+            trip: trip,
+            tripFromCache: false,
+            screen: "home",
+            overlay: "tripChanged"
+          });
+          return;
+        }
+        setState({ trip: trip, tripFromCache: false }, { render: false });
+        loadStations({ force: true });
+      })
+      .catch(function () {
+        loadStations({ force: true });
+      });
   }
 
   function rowMuted(a, b) {
-    var r = el("div", "row");
-    return (
-      (r.style.marginTop = "6px"),
-      r.appendChild(el("span", "muted", a)),
-      r.appendChild(el("span", null, b)),
-      r
-    );
+    var r = el("div", "row mt-sm");
+    r.appendChild(el("span", "muted", a));
+    r.appendChild(el("span", null, b));
+    return r;
   }
 
   /* ========== home screen ========== */
+  function knownHoldRub() {
+    var seen = {};
+    var sum = 0;
+    state.history.forEach(function (h) {
+      if (!h.active || !h.fuelingId || seen[h.fuelingId]) return;
+      seen[h.fuelingId] = true;
+      sum += Number(h.amountHeld) || 0;
+    });
+    var af = state.activeFueling;
+    if (af && af.id && !seen[af.id]) sum += Number(af.amountHeld) || 0;
+    return sum;
+  }
+
   function viewHome() {
     var s = el("div", "screen");
     (state.online && !state.tripFromCache) ||
@@ -2144,18 +2728,15 @@
         )
       );
     var body = el("div", "screen-body");
-    if ((body.appendChild(el("h1", "title", "Заправка в рейсе")), !state.trip)) {
+    var homeTop = el("div", "topbar");
+    homeTop.appendChild(el("h1", "title", "Заправка в рейсе"));
+    homeTop.appendChild(refreshIconBtn(refreshHome));
+    body.appendChild(homeTop);
+    if (!state.trip) {
       (body.appendChild(el("div", "card muted", "Не удалось загрузить рейс.")),
-        s.appendChild(body));
-      var bf = el("div", "bottom"),
-        rb = el("button", "btn secondary", "Обновить");
-      return (
-        (rb.type = "button"),
-        (rb.onclick = refreshHome),
-        bf.appendChild(rb),
-        s.appendChild(bf),
-        s
-      );
+        s.appendChild(body),
+        s.appendChild(el("div", "bottom")));
+      return s;
     }
     var trip = state.trip,
       cardTrip = el("div", "card");
@@ -2192,20 +2773,35 @@
       cardTrip.appendChild(el("div", "muted", "Тягач " + trip.truck)),
       body.appendChild(cardTrip));
     var left = Number(trip.limitLeft) || 0,
-      // Полоска = остаток от 20 000 ₽ (не израсходованное).
-      leftPct = Math.max(0, Math.min(100, Math.round((100 * left) / 2e4))),
+      total = tripLimitTotal(),
+      holdAmt = knownHoldRub(),
+      leftPct =
+        total > 0 ? Math.max(0, Math.min(100, Math.round((100 * left) / total))) : 0,
+      holdPct =
+        total > 0 ? Math.max(0, Math.min(100 - leftPct, Math.round((100 * holdAmt) / total))) : 0,
       cardLimit = el("div", "card");
     (cardLimit.appendChild(
       el("div", "muted", state.tripFromCache ? "Доступно · кэш" : "Доступно сейчас")
     ),
       cardLimit.appendChild(el("div", "limit", money(left))),
-      cardLimit.appendChild(el("div", "muted", "из " + money(2e4) + " на рейс")));
-    var bar = el("div", "progress"),
-      fill = el("i");
-    ((fill.style.width = leftPct + "%"),
-      bar.appendChild(fill),
-      cardLimit.appendChild(bar),
-      body.appendChild(cardLimit));
+      cardLimit.appendChild(el("div", "muted", "из " + money(total) + " на рейс")));
+    var bar = el("div", "progress stacked");
+    var availSeg = el("span", "seg-avail");
+    availSeg.style.width = leftPct + "%";
+    bar.appendChild(availSeg);
+    if (holdPct > 0) {
+      var holdSeg = el("span", "seg-hold");
+      holdSeg.style.width = holdPct + "%";
+      holdSeg.title = "В холде " + money(holdAmt);
+      bar.appendChild(holdSeg);
+    }
+    cardLimit.appendChild(bar);
+    if (holdPct > 0) {
+      cardLimit.appendChild(
+        el("div", "muted sm", "Тёмно-серый участок — активный холд " + money(holdAmt))
+      );
+    }
+    body.appendChild(cardLimit);
     var holdLine = el("div", "hold-line");
     holdLine.appendChild(el("span", "muted", "Часть суммы может быть в холде"));
     var holdBtn = el("button", "hold-link", "Что такое холд?");
@@ -2216,36 +2812,65 @@
         });
       }),
       holdLine.appendChild(holdBtn),
-      body.appendChild(holdLine),
-      body.appendChild(el("div", "section-label", "Последние заправки")));
-    var hist = el("div", "hist"),
-      preview = state.history.slice(0, 2);
-    (preview.length
-      ? preview.forEach(function (h) {
-          hist.appendChild(histRow(h));
-        })
-      : hist.appendChild(el("div", "hist-item muted", "Пока пусто — появятся после заказов")),
-      body.appendChild(hist));
+      body.appendChild(holdLine));
+    var hist = el("div", "hist");
+    var shownId = state.activeFueling && state.activeFueling.id;
+    var otherActive = state.history.filter(function (h) {
+      return h.active && h.fuelingId && h.fuelingId !== shownId;
+    });
+    var activeCount = (state.activeFueling ? 1 : 0) + otherActive.length;
+    if (activeCount) {
+      body.appendChild(
+        el(
+          "div",
+          "section-label",
+          activeCount > 1 ? "Активные заправки" : "Активная заправка"
+        )
+      );
+      if (state.activeFueling) hist.appendChild(activeFuelingCard(state.activeFueling, false));
+      otherActive.forEach(function (h) {
+        hist.appendChild(histRow(h, false));
+      });
+    } else {
+      body.appendChild(el("div", "section-label", "Последняя заправка"));
+      var last = state.history[0];
+      if (last) hist.appendChild(histRow(last, false));
+      else
+        hist.appendChild(
+          el("div", "hist-item muted", "Пока пусто — появятся после заказов")
+        );
+    }
+    body.appendChild(hist);
     var all = el("button", "linkish", "Вся история →");
     ((all.type = "button"),
       (all.onclick = function () {
-        setState({
-          screen: "history",
-          overlay: null
-        });
+        setState({ screen: "history", overlay: null });
+        if (state.online) {
+          callApi("getActiveFueling")
+            .then(function (f) {
+              if (f) ensureHistoryForActive(f);
+              return reconcileOpenHistory().then(function () {
+                if ("history" === state.screen) {
+                  setState({ activeFueling: f || null });
+                }
+              });
+            })
+            .catch(function () {});
+        }
       }),
       body.appendChild(all),
       s.appendChild(body));
     var bottom = el("div", "bottom");
-    if (!state.online || state.tripFromCache) {
-      var retry = el("button", "btn secondary", "Обновить");
-      ((retry.type = "button"), (retry.onclick = refreshHome), bottom.appendChild(retry));
-    }
-    var go = el("button", "btn", "Заправиться");
+    var busy = !!state.loading;
+    var go = el(
+      "button",
+      "btn" + (busy ? " busy" : ""),
+      busy ? "Загрузка…" : "Заправиться"
+    );
     return (
       (go.type = "button"),
-      (go.disabled = !state.online || state.tripFromCache),
-      (go.onclick = onStartFueling),
+      (go.disabled = busy || !state.online || state.tripFromCache),
+      busy || (go.onclick = onStartFueling),
       bottom.appendChild(go),
       s.appendChild(bottom),
       s
@@ -2253,20 +2878,232 @@
   }
 
   /* ========== history row / station tags / nearest card ========== */
-  function histRow(h) {
-    var item = el("div", "hist-item"),
-      top = el("div", "top");
-    top.appendChild(el("span", "name", h.stationName || "АЗС"));
-    var st = el(
-      "span",
-      "st " + (h.ok ? "ok" : "bad"),
-      h.ok ? "Успешно" : h.holdReturned ? "Холд возвращён" : "Не удалось"
+  function histFormula(h) {
+    var lit = h.ok
+      ? h.factLiters != null
+        ? h.factLiters
+        : h.liters
+      : h.orderedLiters != null
+        ? h.orderedLiters
+        : h.liters;
+    var price = h.price;
+    var sum = h.ok ? h.factAmount : h.amountHeld != null ? h.amountHeld : h.factAmount;
+    if (lit == null || price == null || sum == null) return null;
+    return {
+      head:
+        litersStr(lit) +
+        " л × " +
+        perLiter(price).replace(" ₽/л", "") +
+        " ₽/л = ",
+      sum: money(sum)
+    };
+  }
+
+  function appendHistFormulaRow(item, label, h) {
+    var row = el("div", "row mt-sm");
+    row.appendChild(el("span", "muted", label));
+    var val = el("span", "hist-formula");
+    var formula = histFormula(h);
+    if (formula) {
+      val.appendChild(document.createTextNode(formula.head));
+      val.appendChild(el("span", "hist-sum", formula.sum));
+    } else {
+      val.appendChild(
+        el(
+          "span",
+          "hist-sum",
+          money(h.ok ? h.factAmount : h.amountHeld != null ? h.amountHeld : h.factAmount)
+        )
+      );
+    }
+    row.appendChild(val);
+    item.appendChild(row);
+  }
+
+  function appendHistUnderfillRows(item, h, withRefund) {
+    appendHistFormulaRow(item, "Списано", h);
+    if (false === withRefund) return;
+    var refund = holdRefundAmount(h);
+    if (refund > 0.009) {
+      item.appendChild(rowMuted("Возврат холда", money(refund)));
+    }
+  }
+
+  function fuelingStatusLabel(st) {
+    return (
+      {
+        accepted: "Принят",
+        waiting_nozzle: "Ожидание пистолета",
+        fueling: "Налив",
+        completed: "Завершена",
+        cancelled: "Отменена"
+      }[st] || "Холд"
     );
-    (top.appendChild(st), item.appendChild(top));
-    var line = h.ok
-      ? (h.whenLabel || "") + " · " + litersStr(h.factLiters) + " л · " + money(h.factAmount)
-      : (h.whenLabel ? h.whenLabel + " · " : "") + (h.reason || "");
-    return (item.appendChild(el("div", "muted", line || "—")), item);
+  }
+
+  function histWhenReasonLine(h) {
+    var parts = [];
+    if (h.whenLabel) parts.push(h.whenLabel);
+    if (h.reason) parts.push(h.reason);
+    return parts.length ? parts.join(" · ") : "";
+  }
+
+  function histFuelPumpLine(h) {
+    var parts = [];
+    if (h.fuelName) parts.push(h.fuelName);
+    if (h.pumpLabel) parts.push(h.pumpLabel);
+    else if (h.pump != null) parts.push(String(h.pump));
+    return parts.length ? parts.join(" · ") : "";
+  }
+
+  function appendHistHead(item, whenText, statusClass, statusText, stationName) {
+    var head = el("div", "top");
+    head.appendChild(el("span", "muted sm", whenText || "—"));
+    head.appendChild(el("span", statusClass, statusText));
+    item.appendChild(head);
+    item.appendChild(el("div", "name", stationName || "АЗС"));
+  }
+
+  function activeFuelingCard(f, withDetails) {
+    var item = el("div", "hist-item active-fuel");
+    var histEntry = null;
+    state.history.forEach(function (h) {
+      if (h.fuelingId === f.id) histEntry = h;
+    });
+    var whenSource = histEntry || { whenLabel: whenLabelNow(), reason: "" };
+    appendHistHead(
+      item,
+      histWhenReasonLine(whenSource),
+      "st ok",
+      fuelingStatusLabel(f.status),
+      f.stationName
+    );
+    if (withDetails) {
+      var addr =
+        f.stationAddress ||
+        (state.stationDetail && state.stationDetail.address) ||
+        (histEntry && histEntry.stationAddress) ||
+        "";
+      if (addr) item.appendChild(el("div", "muted sm", addr));
+      var fuelPump = histFuelPumpLine({
+        fuelName: f.fuelName || (histEntry && histEntry.fuelName) || "",
+        pumpLabel: historyPumpLabel(f),
+        pump: f.pump
+      });
+      if (fuelPump) item.appendChild(el("div", "muted sm", fuelPump));
+    }
+    item.appendChild(
+      el(
+        "div",
+        "muted",
+        "В холде " +
+          money(f.amountHeld) +
+          (f.liters != null ? " · " + litersStr(f.liters) + " л" : "")
+      )
+    );
+    if ("fueling" === f.status && f.currentLiters != null) {
+      item.appendChild(
+        el("div", "muted sm", "Налито " + litersStr(f.currentLiters) + " л")
+      );
+    }
+    var open = el("button", "btn secondary hist-open", "К заправке");
+    open.type = "button";
+    open.onclick = function () {
+      openFuelingById(f.id);
+    };
+    item.appendChild(open);
+    return item;
+  }
+
+  function histStatusLabel(h) {
+    if (h.active) return "Холд активен";
+    if (isUnderfillHistory(h)) return "Недолив";
+    if (h.ok) return "Успешно";
+    if (h.holdReturned) return "Возвращён";
+    return "Не удалось";
+  }
+
+  function histStatusClass(h) {
+    if (h.active) return "st ok";
+    if (isUnderfillHistory(h)) return "st underfill";
+    if (h.ok) return "st ok";
+    return "st bad";
+  }
+
+  function histRow(h, withDetails) {
+    var showDetails = withDetails !== false;
+    if (
+      h.active &&
+      state.activeFueling &&
+      state.activeFueling.id === h.fuelingId
+    ) {
+      return activeFuelingCard(state.activeFueling, showDetails);
+    }
+    var item = el("div", "hist-item" + (h.active ? " active-fuel" : ""));
+    appendHistHead(
+      item,
+      histWhenReasonLine(h),
+      histStatusClass(h),
+      histStatusLabel(h),
+      h.stationName
+    );
+    if (showDetails) {
+      if (h.stationAddress) {
+        item.appendChild(el("div", "muted sm", h.stationAddress));
+      }
+      var fuelPump = histFuelPumpLine(h);
+      if (fuelPump) item.appendChild(el("div", "muted sm", fuelPump));
+    }
+    if (h.active) {
+      item.appendChild(rowMuted("В холде", money(h.amountHeld)));
+      if (h.fuelingId) {
+        var open = el("button", "btn secondary hist-open", "К заправке");
+        open.type = "button";
+        open.onclick = function () {
+          openFuelingById(h.fuelingId);
+        };
+        item.appendChild(open);
+      }
+    } else if (!h.ok && h.holdReturned) {
+      appendHistFormulaRow(item, "Холд", h);
+    } else if (h.ok && isUnderfillHistory(h)) {
+      // На главной — только списание; возврат холда — в полном окне истории.
+      appendHistUnderfillRows(item, h, showDetails);
+    } else if (h.ok) {
+      appendHistFormulaRow(item, "Списано", h);
+    }
+    return item;
+  }
+
+  function viewHistory() {
+    var s = el("div", "screen"),
+      body = el("div", "screen-body");
+    body.appendChild(
+      topBack("История заправок", function () {
+        setState({ screen: "home" });
+      })
+    );
+    body.appendChild(
+      el(
+        "div",
+        "hint",
+        "Чеков в приложении нет — при необходимости попросите у диспетчера"
+      )
+    );
+    var hist = el("div", "hist");
+    if (state.history.length) {
+      state.history.forEach(function (h) {
+        hist.appendChild(histRow(h));
+      });
+    } else {
+      hist.appendChild(el("div", "hist-item muted", "История пуста"));
+    }
+    body.appendChild(hist);
+    body.appendChild(
+      el("div", "muted sm", "История на устройстве (API списка не отдаёт).")
+    );
+    s.appendChild(body);
+    return s;
   }
 
   function tierTag(item) {
@@ -2283,12 +3120,6 @@
     return "dear";
   }
 
-  function paintPrice(node, tier) {
-    if ("dear" === tier) node.style.color = "var(--dear)";
-    else if ("mid" === tier) node.style.color = "var(--mid)";
-    else node.style.color = "var(--cheap)";
-  }
-
   // Ближайшая: оранжевая обводка + полоска по tier, тег без расстояния.
   function nearStationCard(item) {
     var btn = el("button", "near-block station " + stripeClass(item.tier));
@@ -2300,13 +3131,14 @@
     btn.appendChild(el("div", "muted addr", item.st.address || ""));
     var meta = el("div", "meta");
     meta.appendChild(el("span", "dist", formatDist(item.dist)));
-    var pr = el("span", "price", perLiter(item.price));
-    paintPrice(pr, item.tier);
-    meta.appendChild(pr);
+    meta.appendChild(stationPriceCol(item));
     btn.appendChild(meta);
-    btn.onclick = function () {
-      selectStation(item, false);
-    };
+    btn.disabled = !!state.loading;
+    if (!state.loading) {
+      btn.onclick = function () {
+        selectStation(item, false);
+      };
+    }
     return btn;
   }
 })();
